@@ -137,13 +137,9 @@ Nazwa repozytorium na GitHubie (bez spacji, znaki łacińskie): **`Automatyczne-
    ```powershell
    gh auth login
    ```
-2. W katalogu projektu (ten folder z `README.md`):
+2. W katalogu projektu (ten folder z `README.md`). Jeśli **nie** masz jeszcze lokalnego `.git`, uruchom `git init`, `git add -A`, `git commit -m "..."` (sprawdź `git status` — nie powinno być `local_env.ps1` ani `.env`). Następnie:
    ```powershell
    cd "C:\Users\svinc\Automatyczna wysylka meili"
-   git init
-   git add -A
-   git status   # upewnij się, że nie ma local_env.ps1 / .env
-   git commit -m "Initial commit: pipeline, dokumentacja, testy"
    gh repo create Automatyczne-wysylanie-meili --public --source=. --remote=origin --push --description "Automatyczne wysyłanie meili: SerpAPI, OpenAI, Gmail SMTP, PowerShell"
    ```
    Jeśli repozytorium **już istnieje** na koncie (puste), zamiast `gh repo create` użyj:
