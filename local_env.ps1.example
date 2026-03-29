@@ -1,0 +1,26 @@
+# Skopiuj jako local_env.ps1 (ten plik jest w .gitignore - nie commituj sekretow).
+#   Copy-Item -Path "local_env.ps1.example" -Destination "local_env.ps1"
+#
+# Pelna lista zmiennych: env.example | dokumentacja: docs/DOKUMENTACJA_PROJEKTU.md
+#
+# Wartosci w cudzyslowie musza byc PELNE klucze z panelu - NIE wklejaj doslownie trzech kropek "...".
+#
+# OpenAI + setx: jesli trzymasz klucz tylko w profilu uzytkownika (setx), ZAKOMENTUJ ponizsza linie
+# albo ustaw pusto — wtedy run_with_env.ps1 wezmie wartosc z User. Jesli tu zostawisz krotki placeholder,
+# skrypt zamieni go na dluzszy klucz z profilu (jesli setx jest poprawny).
+
+$env:OPENAI_API_KEY = "sk-proj-WKLEJ_PELNY_KLUCZ"
+$env:GMAIL_APP_PASSWORD = "haslo_aplikacyjne_gmail"
+# To samo konto co haslo aplikacji (opcjonalnie — domyslnie adres z contact_mailer):
+# $env:GMAIL_SENDER_EMAIL = "twoj@gmail.com"
+$env:SERPAPI_API_KEY = "klucz_serpapi"
+
+# Folder lub plik PDF - jak w README
+$env:CV_PATH = "C:\Users\svinc\Documents\CV"
+
+# Opcjonalnie:
+# $env:OPENAI_MODEL = "gpt-4o-mini"
+# $env:MAX_EMAILS_PER_DAY = "100"
+# $env:CAMPAIGN_LOG_ENABLED = "1"
+# $env:PIPELINE_LOG_TO_FILE = "1"
+# $env:PIPELINE_JSON_BACKUP = "1"

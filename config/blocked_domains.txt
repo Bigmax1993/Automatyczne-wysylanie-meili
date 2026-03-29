@@ -1,0 +1,4 @@
+# Jedna domena na linię (część po @ w adresie e-mail), małe litery.
+# Przykłady (usuń # aby aktywować):
+# competitor.example.com
+# old-employer.pl
