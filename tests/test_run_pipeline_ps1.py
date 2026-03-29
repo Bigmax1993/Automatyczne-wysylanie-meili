@@ -99,6 +99,8 @@ def test_run_pipeline_fallback_kontakty_dir_and_extensions() -> None:
     assert "EXTRA_CONTACTS_DIR" in text
     assert r"Documents\kontakty" in text
     assert ".xlsx" in text and ".csv" in text
+    assert "--extra-contacts-dir" in text
+    assert '"--extra-contacts-dir", $kontaktyDir' in text
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Tresc skryptu Windows")

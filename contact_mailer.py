@@ -93,27 +93,33 @@ CAMPAIGN_LOG_PATH = os.environ.get(
 
 SYSTEM_PROMPT = """Jesteś asystentem do pisania profesjonalnych, treściwych maili aplikacyjnych po polsku (kilka logicznych zdań w akapitach — nie jednowierszowe ogólniki).
 Cała treść wiadomości musi być w całości po polsku: bez zdań, zwrotów ani pojedynczych słów w języku angielskim lub innym (wyjątek: nazwy własne firm, produktów lub adresy URL dokładnie jak w danych wejściowych).
-Pisz naturalnie. Nie wymyślaj faktów — używaj tylko danych z wiadomości użytkownika.
-Nie wspominaj w treści maila o narzędziach lub usługach zbierania leadów (np. SerpAPI) ani o technicznych metodach znalezienia oferty. Jeśli w danych nie ma konkretnego portalu lub źródła ogłoszenia, nie poruszaj tematu skąd znaleziono ofertę.
+Bezwzględne reguły (żadnych wyjątków):
+- Zakaz halucynacji: nie dopowiadaj faktów o kandydacie, firmie, ofercie, terminach, projektach ani doświadczeniu. Używaj wyłącznie informacji, które wprost wynikają z wiadomości użytkownika (firma, rola, miasto, branża, strona WWW, tryb pracy, uwagi). Jeśli czegoś nie ma w danych — milcz na ten temat.
+- W treści maila nie wstawiaj żadnych numerów telefonów ani innych numerów kontaktu (żadnych ciągów cyfr telefonu, „zadzwonię”, „pod numerem”, „kontakt telefoniczny”) — nawet gdyby pojawiły się w surowych danych pomocniczych, ignoruj je w treści.
+- Nie wspominaj w treści maila o narzędziach lub usługach zbierania leadów (np. SerpAPI) ani o technicznych metodach znalezienia oferty. Jeśli w danych nie ma konkretnego portalu lub źródła ogłoszenia, nie poruszaj tematu skąd znalazłeś ofertę.
+Pisz naturalnie w ramach powyższych ograniczeń.
 Podpis: najpierw linia z „Pozdrawiam,” lub „Pozdrawiam”, od następnej linii wyłącznie imię i nazwisko podane w instrukcji użytkownika — bez placeholderów w nawiasach.
 Zwróć samą treść maila (bez tematu w środku)."""
 SUBJECT_SYSTEM_PROMPT = """Tworzysz krótki temat e-maila aplikacyjnego po polsku.
 Cały temat musi być w całości po polsku (bez angielskich słów ani mieszanych języków; nazwy własne firm mogą zostać w oryginale z danych).
 Temat ma być konkretny, profesjonalny i spersonalizowany pod firmę/rolę.
-Nie używaj w temacie nazw narzędzi zbierania danych (np. SerpAPI).
+Nie używaj w temacie nazw narzędzi zbierania danych (np. SerpAPI). Nie umieszczaj numerów telefonów ani żadnych ciągów cyfr jak numer.
 Zwróć tylko temat (jedna linia, bez cudzysłowów)."""
 
 SYSTEM_PROMPT_DE = """Du formulierst professionelle, inhaltlich substanzielle deutsche Bewerbungs-E-Mails (mehrere Sätze in Absätzen — keine Einzeiler mit Allgemeinplätzen).
 Der gesamte Nachrichtentext muss durchgehend auf Deutsch sein: keine englischen oder polnischen Sätze oder Einzelwörter (Ausnahme: Eigennamen von Firmen oder Produkten sowie URLs genau wie in den Eingabedaten).
-Formuliere natürlich. Erfinde keine Fakten — nutze nur die Angaben des Nutzers.
-Erwähne im Fließtext keine Lead-Tools oder technischen Erfassungsdienste (z. B. SerpAPI). Fehlt ein konkretes Portal oder eine echte Quelle der Stellenausschreibung in den Daten, sprich das Thema „woher die Stelle“ gar nicht an.
+Strikte Regeln (ohne Ausnahme):
+- Keine Halluzinationen: keine erfundenen Fakten über den Bewerber, das Unternehmen, die Stelle, Fristen oder Projekte. Nutze ausschließlich Informationen, die sich ausdrücklich aus den Nutzerdaten ergeben (Firma, Rolle, Stadt, Branche, Website, Arbeitsmodell, Hinweise). Fehlt eine Information — nicht erwähnen.
+- Im Fließtext der E-Mail keine Telefonnummern und keine anderen Kontaktnummern (keine Ziffernfolgen wie Rufnummern, kein „ich rufe an unter …“, kein „telefonisch unter“) — auch wenn solche Angaben in Hilfsdaten vorkämen, im Text ignorieren.
+- Erwähne im Fließtext keine Lead-Tools oder technischen Erfassungsdienste (z. B. SerpAPI). Fehlt ein konkretes Portal oder eine echte Quelle der Stellenausschreibung in den Daten, sprich das Thema „woher die Stelle“ gar nicht an.
+Formuliere natürlich innerhalb dieser Grenzen.
 Signatur: zuerst die Grußformel „Mit freundlichen Grüßen," oder „Mit freundlichen Grüßen", in der nächsten Zeile ausschließlich der vollständige Name aus der Nutzeranweisung — keine Platzhalter in eckigen Klammern.
 Gib nur den E-Mail-Text zurück (ohne Betreff im Text)."""
 
 SUBJECT_SYSTEM_PROMPT_DE = """Du erstellst eine kurze deutsche Betreffzeile für eine Bewerbungs-E-Mail.
 Der gesamte Betreff muss auf Deutsch sein (ohne englische Wörter; Firmennamen aus den Daten dürfen original bleiben).
 Betreff: konkret, professionell, personalisiert auf Firma/Rolle.
-Keine Namen von Datenerfassungs-Tools (z. B. SerpAPI) im Betreff.
+Keine Namen von Datenerfassungs-Tools (z. B. SerpAPI) im Betreff. Keine Telefonnummern und keine ziffernartigen Nummernfolgen im Betreff.
 Gib nur eine Zeile Betreff zurück (ohne Anführungszeichen)."""
 
 _GERMAN_HOST_SUFFIXES = (".de", ".at")
@@ -135,6 +141,12 @@ FIELD_ALIASES = {
 def _source_column_names_for_context() -> frozenset[str]:
     names = {COL_SOURCE}
     names.update(FIELD_ALIASES.get("source", []))
+    return frozenset(names)
+
+
+def _phone_column_names_for_context() -> frozenset[str]:
+    names = {COL_PHONE}
+    names.update(FIELD_ALIASES.get("phone", []))
     return frozenset(names)
 
 
@@ -176,6 +188,25 @@ def _redact_source_in_row_context_json(context_json: str) -> str:
                     changed = True
             elif pub != raw:
                 d[k] = pub
+                changed = True
+    if not changed:
+        return context_json
+    return json.dumps(d, ensure_ascii=False, indent=2)
+
+
+def _redact_phone_in_row_context_json(context_json: str) -> str:
+    """Usuwa z JSON kontekstu pola telefonu — model nie ma podawać numerów w treści maila."""
+    try:
+        d = json.loads(context_json)
+    except (json.JSONDecodeError, TypeError):
+        return context_json
+    if not isinstance(d, dict):
+        return context_json
+    changed = False
+    for k in list(d.keys()):
+        if k in _phone_column_names_for_context():
+            if k in d:
+                del d[k]
                 changed = True
     if not changed:
         return context_json
@@ -357,14 +388,16 @@ _MAIL_LENGTH_RETRY_HINT_PL = (
     "Poprzednia wersja była zbyt krótka lub zbyt ogólnikowa. Przepisz cały mail od zera:\n"
     "- minimum 5 pełnych zdań w 2–3 akapitach,\n"
     "- co najmniej ok. 450 znaków z treścią merytoryczną (nie licząc samego podpisu),\n"
-    "- odnieś się konkretnie do firmy lub roli z danych; unikaj jednego zdania bez treści."
+    "- odnieś się konkretnie do firmy lub roli z danych; unikaj jednego zdania bez treści.\n"
+    "- bez numerów telefonu w treści; bez wymyślonych faktów — tylko dane z instrukcji."
 )
 
 _MAIL_LENGTH_RETRY_HINT_DE = (
     "Die vorherige Version war zu kurz oder zu allgemein. Schreiben Sie die gesamte E-Mail neu:\n"
     "- mindestens 5 vollständige Sätze in 2–3 Absätzen,\n"
     "- mindestens ca. 450 Zeichen inhaltlicher Text (ohne bloße Grußzeile),\n"
-    "- konkreter Bezug zu Firma/Rolle aus den Daten; keine Ein-Satz-Floskeln."
+    "- konkreter Bezug zu Firma/Rolle aus den Daten; keine Ein-Satz-Floskeln.\n"
+    "- keine Telefonnummern im Text; keine erfundenen Fakten — nur die Nutzerdaten."
 )
 
 
@@ -490,7 +523,9 @@ def _build_row_context(row: pd.Series) -> str:
 
 def _build_row_context_for_generation(row: pd.Series, website: str) -> str:
     """Kontekst wiersza; opcjonalnie skrót publicznej strony WWW (ENABLE_WEB_PAGE_CONTEXT=1)."""
-    base = _redact_source_in_row_context_json(_build_row_context(row))
+    base = _redact_phone_in_row_context_json(
+        _redact_source_in_row_context_json(_build_row_context(row))
+    )
     try:
         from web_page_context import append_page_excerpt_to_context_json
     except ImportError:
@@ -666,13 +701,12 @@ Ziel:
 - Sie bewerben sich auf die Stelle und signalisieren Interesse an einem Vorstellungsgespräch
 - Sie teilen mit, dass Sie den Lebenslauf im Anhang senden
 
-Daten Firma/Stelle:
+Daten Firma/Stelle (ausschließlich diese Angaben für den Fließtext verwenden, nichts dazuerfinden):
 - Firma: {company}
 - Rolle: {role}
 - Stadt: {city}
 - Branche: {industry}
 - Website: {website}
-- Telefon/Kontakt: {phone}
 - Arbeitsmodell: {mode}
 {source_line_de}- Hinweise: {notes}
 
@@ -682,8 +716,10 @@ Vollständige Zeilendaten (JSON):
 Anforderungen:
 - gesamter E-Mail-Text ausschließlich auf Deutsch (keine englischen oder polnischen Einblendungen)
 - professioneller, höflicher Ton
+- keine Telefonnummern und keine ziffernartigen Rufnummern im Text; keine Einladung zum Zuruf auf eine Nummer
+- keine erfundenen Fakten über mich, die Stelle oder das Unternehmen — nur das, was oben oder im JSON ausdrücklich steht
 - erfinden Sie keine Fakten über meine Berufserfahrung
-- wenn im JSON ein Feld „fragment_publicznej_strony_www“ vorkommt, nutzen Sie es nur als ergänzende öffentliche Information; erfinden Sie keine Details jenseits dieses Fragments und der übrigen Felder
+- wenn im JSON ein Feld „fragment_publicznej_strony_www“ vorkommt, nutzen Sie es nur als ergänzende öffentliche Information; erfinden Sie keine Details jenseits dieses Fragments; Telefonnummern aus dem Fragment nicht übernehmen
 - {b2b_instruction}
 - {contract_instruction}
 - Abschluss mit „Mit freundlichen Grüßen," oder „Mit freundlichen Grüßen", danach eine neue Zeile und **nur** der Name: {MAIL_SIGNATORY_NAME} (genau so, ohne Klammern oder Platzhalter)."""
@@ -716,13 +752,12 @@ Mój cel:
 - aplikuję na stanowisko i wyrażam zainteresowanie rozmową rekrutacyjną
 - informuję, że w załączniku przesyłam CV
 
-Dane firmy i oferty:
+Dane firmy i oferty (tylko te pola do treści maila — niczego nie dopowiadaj):
 - firma: {company}
 - stanowisko/rola: {role}
 - miasto: {city}
 - branża: {industry}
 - strona WWW: {website}
-- telefon/kontakt: {phone}
 - tryb pracy: {mode}
 {source_line_pl}- uwagi: {notes}
 
@@ -732,8 +767,10 @@ Pełne dane z wiersza (JSON z Excela):
 Wymagania:
 - cała treść maila wyłącznie po polsku (zero angielskich zwrotów typu „Best regards”, „Looking forward” itp.)
 - ton profesjonalny i uprzejmy
+- zakaz numerów telefonów w treści: nie wstawiaj żadnego numeru, żadnej frazy typu „zadzwonię pod …” — ignoruj numery także w fragmencie strony
+- tylko twarde fakty z listy powyżej i z JSON — zero domysłów o mnie, firmie, ofercie lub terminach
 - nie wymyślaj faktów o moim doświadczeniu
-- jeśli w JSON jest pole „fragment_publicznej_strony_www”, traktuj je wyłącznie jako uzupełnienie publicznych informacji z witryny; nie wymyślaj szczegółów spoza tego fragmentu i pozostałych pól
+- jeśli w JSON jest pole „fragment_publicznej_strony_www”, traktuj je wyłącznie jako uzupełnienie publicznych informacji z witryny; nie wymyślaj szczegółów spoza tego fragmentu i pozostałych pól; nie kopiuj z fragmentu numerów telefonów
 - {b2b_instruction}
 - {contract_instruction}
 - zakończ linią „Pozdrawiam,” lub „Pozdrawiam”, a **zaraz pod spodem w nowej linii wyłącznie** podpis: {MAIL_SIGNATORY_NAME} (dokładnie ten zapis, bez nawiasów kwadratowych i bez tekstu typu [Twoje imię])."""
@@ -848,6 +885,7 @@ Anforderungen:
 - gesamter Betreff auf Deutsch (ohne englische Wörter),
 - max. 90 Zeichen,
 - keine Emojis,
+- keine Telefonnummern und keine Ziffernfolgen wie eine Nummer,
 - konkret und professionell,
 {de_tail_block}"""
         subject_system = SUBJECT_SYSTEM_PROMPT_DE
@@ -879,6 +917,7 @@ Wymagania:
 - cały temat wyłącznie po polsku (bez angielskich słów),
 - max 90 znaków,
 - bez emoji,
+- bez numerów telefonu i bez ciągów cyfr jak numer,
 - konkret i profesjonalny ton,
 {pl_tail_block}"""
         subject_system = SUBJECT_SYSTEM_PROMPT
@@ -946,6 +985,15 @@ def zapisz_excel(df: pd.DataFrame, sciezka: str) -> None:
 
 
 def main() -> None:
+    try:
+        from sent_mail_registry import cleanup_stale_registry_files
+
+        n_del = cleanup_stale_registry_files()
+        if n_del:
+            logger.info("Rejestr wysyłek JSON: usunięto %s przeterminowanych plików .jsonl", n_del)
+    except Exception:
+        logger.exception("Czyszczenie przeterminowanych plików rejestru .jsonl nie powiodło się")
+
     excel_path = _resolve_excel_path()
     cv_path = _resolve_cv_path()
     from excel_workbook_reader import read_excel_workbook
@@ -1204,6 +1252,28 @@ def _process_rows(
             status="sent",
             reason="",
         )
+        try:
+            from sent_mail_registry import append_sent_record
+
+            append_sent_record(
+                batch_path=excel_path,
+                output_csv_path=excel_path,
+                email=email,
+                company=company,
+                role=role,
+                city=city,
+                industry=industry,
+                website=website,
+                phone=phone,
+                mode=mode,
+                source=source,
+                notes=notes,
+                subject=temat,
+                locale=mail_locale,
+                dry_run=DRY_RUN,
+            )
+        except Exception:
+            logger.exception("Zapis rejestru JSON wysłanych maili nie powiódł się")
         logger.info("Wysłano: %s | %s", email, temat)
 
         if not DRY_RUN:

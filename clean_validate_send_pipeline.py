@@ -264,6 +264,7 @@ def _send_from_cleaned_csv(
     csv_path: str,
     dry_run: bool,
     cv_path: str,
+    batch_source_path: str = "",
 ) -> Dict[str, int]:
     stats = {
         "sent": 0,
@@ -472,6 +473,29 @@ def _send_from_cleaned_csv(
                 status="sent",
                 reason="",
             )
+            try:
+                from sent_mail_registry import append_sent_record
+
+                batch_label = batch_source_path or csv_path
+                append_sent_record(
+                    batch_path=batch_label,
+                    output_csv_path=csv_path,
+                    email=email,
+                    company=company,
+                    role=role,
+                    city=city,
+                    industry=industry,
+                    website=website,
+                    phone=phone,
+                    mode=mode,
+                    source=source,
+                    notes=notes,
+                    subject=subject,
+                    locale=mail_locale,
+                    dry_run=dry_run,
+                )
+            except Exception:
+                logger.exception("Zapis rejestru JSON wysłanych maili nie powiódł się")
             if not dry_run:
                 cm._apply_send_delay()
 
@@ -506,6 +530,7 @@ def _process_source(
             csv_path=output_csv,
             dry_run=dry_run,
             cv_path=cv_path,
+            batch_source_path=source_path,
         )
     if client is None:
         raise RuntimeError("Brak klienta OpenAI (wewnętrzny błąd).")
@@ -517,6 +542,7 @@ def _process_source(
         csv_path=output_csv,
         dry_run=dry_run,
         cv_path=cv_path,
+        batch_source_path=source_path,
     )
 
 
@@ -565,6 +591,15 @@ def main() -> None:
     from pipeline_logging import setup_logging
 
     setup_logging("clean_validate_send_pipeline")
+
+    try:
+        from sent_mail_registry import cleanup_stale_registry_files
+
+        n_del = cleanup_stale_registry_files()
+        if n_del:
+            logger.info("Rejestr wysyłek JSON: usunięto %s przeterminowanych plików .jsonl", n_del)
+    except Exception:
+        logger.exception("Czyszczenie przeterminowanych plików rejestru .jsonl nie powiodło się")
 
     if args.validate_only:
         inp = (args.input or "").strip()

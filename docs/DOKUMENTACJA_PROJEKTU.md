@@ -28,6 +28,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 | `json_data_backup.py` | Kopie zapasowe `DataFrame` do JSON po zapisie CSV/XLSX |
 | `pipeline_version.py` | Wersja zestawu (czyta plik `VERSION`) |
 | `pipeline_launcher_gui.py` | Opcjonalne GUI (Tkinter): uruchamianie `run_with_env.ps1`, podgląd wyjścia, foldery |
+| `sent_mail_registry.py` | Rejestr wysłanych maili (JSONL na partię) pod follow-up; retencja plików (domyślnie 14 dni od ostatniego `sent_at`); `follow_up_mail.py` — lista / eksport / `mark-reply` |
 
 ### Skrypty PowerShell
 

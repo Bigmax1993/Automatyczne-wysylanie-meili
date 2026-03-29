@@ -10,8 +10,9 @@ $pythonExe = "C:\Users\svinc\AppData\Local\Programs\Python\Python313\python.exe"
 if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
     $pythonExe = $env:PIPELINE_PYTHON_EXE.Trim()
 }
-$outputXlsx = "C:\Users\svinc\Documents\Kontakty_serpapi.xlsx"
-$outputCsv = "C:\Users\svinc\Documents\Kontakty_cleaned.csv"
+$docsDir = Join-Path $env:USERPROFILE "Documents"
+$outputXlsx = Join-Path $docsDir "Kontakty_serpapi.xlsx"
+$outputCsv = Join-Path $docsDir "Kontakty_cleaned.csv"
 
 $kontaktyDir = if ($env:EXTRA_CONTACTS_DIR -and $env:EXTRA_CONTACTS_DIR.Trim()) {
     $env:EXTRA_CONTACTS_DIR.Trim()
@@ -31,7 +32,7 @@ if (-not (Test-Path $pythonExe)) {
     throw "Nie znaleziono interpretera Python: $pythonExe"
 }
 
-$logsDir = "C:\Users\svinc\Documents\pipeline_logs"
+$logsDir = Join-Path $docsDir "pipeline_logs"
 if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir | Out-Null
 }
@@ -99,11 +100,15 @@ if (-not (Test-Path -LiteralPath $inputForClean)) {
 
 "[$(Get-Date -Format s)] clean_validate_send_pipeline --input $inputForClean" | Out-File -FilePath $logPath -Append -Encoding utf8
 Write-Host "[pipeline] Wejscie: $inputForClean" -ForegroundColor Cyan
+Write-Host "[pipeline] W tym samym przebiegu Python przetworzy tez pozostale pliki .xlsx/.xls/.csv z folderu:" -ForegroundColor DarkCyan
+Write-Host "         $kontaktyDir" -ForegroundColor DarkCyan
+Write-Host "         (pomija tylko plik, ktory jest glownym wejsciem, jesli lezy w tym folderze)." -ForegroundColor DarkCyan
 
 $cleanArgs = @(
     "clean_validate_send_pipeline.py",
     "--input", $inputForClean,
-    "--output-csv", $outputCsv
+    "--output-csv", $outputCsv,
+    "--extra-contacts-dir", $kontaktyDir
 )
 if ($DryRun) {
     $cleanArgs += "--dry-run"

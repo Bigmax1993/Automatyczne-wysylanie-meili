@@ -82,7 +82,28 @@ Przed ręcznym wywołaniem ustaw zmienne (`$env:...` lub `. .\local_env.ps1`).
 
 ## Pipeline: clean → walidacja → CSV → wysyłka
 
-`clean_validate_send_pipeline.py`: czyta CSV/XLSX, czyści przez OpenAI, waliduje, zapisuje CSV, wysyła maile, domyślnie przetwarza też pliki z `Documents\kontakty` (zob. `--extra-contacts-dir`, `--skip-extra-contacts`, `--skip-clean`, `--validate-only`, `--dry-run`).
+`clean_validate_send_pipeline.py`: czyta CSV/XLSX, czyści przez OpenAI, waliduje, zapisuje CSV, wysyła maile. **Kolejność:** najpierw kończy wysyłkę z głównego `--input` (np. `Kontakty_serpapi.xlsx`), potem **w tym samym uruchomieniu** przetwarza pozostałe pliki `.xlsx`/`.xls`/`.csv` z `Documents\kontakty` (pomija tylko plik, który był głównym wejściem, jeśli leży w tym folderze). `run_pipeline.ps1` przekazuje `--extra-contacts-dir` jawnie. Zob. też `--skip-extra-contacts`, `--skip-clean`, `--validate-only`, `--dry-run`.
+
+## Rejestr wysłanych maili (JSON) i follow-up
+
+Po każdej **udanej** wysyłce (nie w dry-run, wyłączone pod pytest) dopisywany jest wpis do pliku **JSON Lines** (`.jsonl`) w katalogu domyślnie `Documents\pipeline_logs\sent_mail_registry\`. Nazwa pliku odpowiada partii wejściowej (np. `Kontakty_serpapi.jsonl`). Wpis zawiera m.in. e-mail, firmę, pola do ponownej personalizacji, `sent_at`, flagi `reply_received` i `follow_up_sent_at`.
+
+Program **nie sprawdza skrzynki** — „brak odpowiedzi” oznacza: nie oznaczono odpowiedzi. Po tygodniu (lub innym progu):
+
+```powershell
+python follow_up_mail.py list --days 7
+python follow_up_mail.py export --days 7 -o "$env:USERPROFILE\Documents\kontakty\follow_up.xlsx"
+```
+
+Następnie uruchom `clean_validate_send_pipeline.py` (lub cały pipeline) na wygenerowanym pliku. Gdy kandydat odpowie:
+
+```powershell
+python follow_up_mail.py mark-reply --email kandydat@firma.pl
+```
+
+Pliki `.jsonl` są **automatycznie usuwane**, gdy **najnowszy** `sent_at` w pliku jest starszy niż **14 dni** (przy starcie `clean_validate_send_pipeline`, `contact_mailer` i `follow_up_mail`). Ustaw `SENT_MAIL_REGISTRY_RETENTION_DAYS=0`, żeby wyłączyć usuwanie.
+
+Zmienne: `SENT_MAIL_REGISTRY_ENABLED`, `SENT_MAIL_REGISTRY_DIR`, `SENT_MAIL_REGISTRY_RETENTION_DAYS`, `FOLLOW_UP_MIN_DAYS` (opis w `env.example`).
 
 ## CV
 
