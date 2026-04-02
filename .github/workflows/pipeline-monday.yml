@@ -1,9 +1,10 @@
-name: Monday Pipeline Run
+name: Monday-Saturday Pipeline Run
 
 on:
   schedule:
     # 04:00 Europe/Warsaw (CEST, UTC+2) => 02:00 UTC
-    - cron: "0 2 * * 1"
+    # Mon-Sat
+    - cron: "0 2 * * 1-6"
   workflow_dispatch:
 
 permissions:
