@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   clean-validate-send:
@@ -33,6 +34,15 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+
+      - name: Download latest Sunday contacts artifact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: serpapi-sunday.yml
+          branch: main
+          name: kontakty-serpapi
+          path: generated
+          if_no_artifact_found: warn
 
       - name: Verify Sunday contacts file exists
         run: |
