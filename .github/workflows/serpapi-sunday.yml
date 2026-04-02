@@ -5,6 +5,19 @@ on:
     # 21:00 Europe/Warsaw (CEST, UTC+2) => 19:00 UTC
     - cron: "0 19 * * 0"
   workflow_dispatch:
+    inputs:
+      jednorazowo_bez_serpapi:
+        description: >
+          Tylko ten ręczny run: dokończ z pliku generated/Kontakty_serpapi.xlsx już w repozytorium
+          (wgraj wcześniej częściowy Excel), bez żadnych zapytań SerpAPI. Harmonogram (cron) tego nie ustawia.
+        type: boolean
+        default: false
+      enrich_bez_serp_od_wiersza:
+        description: >
+          Opcjonalnie przy pełnym buildzie: od tego indeksu wiersza (0 = pierwszy) nie szukaj strony kontaktu przez SerpAPI;
+          dalej tylko HTTP po istniejącym URL. Puste = wyłączone.
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -16,7 +29,7 @@ jobs:
     env:
       SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.SERP_API_KEY || vars.SERPAPI_API_KEY }}
       SERPAPI_DAILY_LIMIT_ENABLED: "0"
-      SERPAPI_WEEKLY_REQUEST_LIMIT: "200"
+      # Tygodniowy limit zapytań SerpAPI (200) jest wymuszany w build_contacts_serpapi.py — nie ustawiaj tu „sufitu” przez env.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,18 +43,35 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Build contacts with SerpAPI
+        env:
+          # workflow_dispatch: boolean bywa true lub 'true' w zależności od wersji runnera
+          SERPAPI_DISABLE_REQUESTS: ${{ github.event.inputs != null && (github.event.inputs.jednorazowo_bez_serpapi == true || github.event.inputs.jednorazowo_bez_serpapi == 'true') && '1' || '' }}
+          SERPAPI_ENRICH_SKIP_PUBLIC_SEARCH_FROM_INDEX: ${{ github.event.inputs != null && github.event.inputs.enrich_bez_serp_od_wiersza || '' }}
+          JEDNORAZOWO_BEZ_SERP: ${{ github.event.inputs != null && (github.event.inputs.jednorazowo_bez_serpapi == true || github.event.inputs.jednorazowo_bez_serpapi == 'true') && '1' || '0' }}
         run: |
           mkdir -p generated
-          python build_contacts_serpapi.py \
-            --firm-target 1000 \
-            --agency-target 1000 \
-            --ecommerce-target 1000 \
-            --cities "Wroclaw,Zielona Gora,Poznan" \
-            --max-requests-per-group 800 \
-            --pages-per-query 6 \
-            --num-per-request 20 \
-            --enrich-email \
-            --output generated/Kontakty_serpapi.xlsx
+          if [ "$JEDNORAZOWO_BEZ_SERP" = "1" ]; then
+            test -f generated/Kontakty_serpapi.xlsx || {
+              echo "::error::Brak generated/Kontakty_serpapi.xlsx w repozytorium. Wgraj częściowy plik z poprzedniego runu (commit na main), potem uruchom ten tryb ponownie."
+              exit 1
+            }
+            python build_contacts_serpapi.py \
+              --resume-xlsx generated/Kontakty_serpapi.xlsx \
+              --enrich-email \
+              --output generated/Kontakty_serpapi.xlsx
+          else
+            # Budżet 200 zapytań / run (twardy limit w skrypcie): 3×50 na zbieranie grup + ~50 na odkrywanie WWW/kontaktu (SerpAPI).
+            python build_contacts_serpapi.py \
+              --firm-target 120 \
+              --agency-target 120 \
+              --ecommerce-target 120 \
+              --cities "Wroclaw,Zielona Gora,Poznan" \
+              --max-requests-per-group 50 \
+              --pages-per-query 4 \
+              --num-per-request 20 \
+              --enrich-email \
+              --output generated/Kontakty_serpapi.xlsx
+          fi
 
       - name: Upload contacts artifact
         uses: actions/upload-artifact@v4

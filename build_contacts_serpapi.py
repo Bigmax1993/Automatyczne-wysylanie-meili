@@ -13,7 +13,7 @@ import re
 import sys
 import time
 from datetime import datetime, date, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -34,7 +34,13 @@ except Exception:  # pragma: no cover
 
 DEFAULT_TARGET_CITIES = ["Wroclaw", "Zielona Gora", "Poznan"]
 QUERY_SUFFIXES = ["", "praca", "rekrutacja", "kariera", "oferty pracy", "hr"]
-DEFAULT_WEEKLY_REQUEST_LIMIT = 200
+# Twardy limit zapytań SerpAPI na tydzień (kalendarzowy ISO, pon–niedz.).
+# Nie podlega podniesieniu przez SERPAPI_WEEKLY_REQUEST_LIMIT ani wyłączeniu przez wartość <= 0.
+HARD_WEEKLY_SERP_REQUEST_LIMIT = 200
+
+_serp_week_gate_week: str = ""
+_serp_week_gate_closed: bool = False
+_serp_weekly_cap_warning_logged: bool = False
 
 FIRM_KEYWORDS = [
     "Software house data BI",
@@ -96,6 +102,22 @@ def _serp_daily_limit_enabled() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _serp_requests_disabled() -> bool:
+    """Jednorazowy tryb (np. ręczny workflow): zero zapytań do SerpAPI — nie zmienia twardego limitu 200."""
+    v = (os.environ.get("SERPAPI_DISABLE_REQUESTS") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _enrich_skip_public_search_from_index() -> Optional[int]:
+    raw = (os.environ.get("SERPAPI_ENRICH_SKIP_PUBLIC_SEARCH_FROM_INDEX") or "").strip()
+    if not raw:
+        return None
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return None
+
+
 def _serp_run_state_path() -> str:
     p = (os.environ.get("SERPAPI_RUN_STATE_PATH") or "").strip()
     if p:
@@ -115,13 +137,14 @@ def _serp_weekly_state_path() -> str:
 
 
 def _serp_weekly_limit() -> int:
-    raw = (os.environ.get("SERPAPI_WEEKLY_REQUEST_LIMIT") or "").strip()
-    if not raw:
-        return DEFAULT_WEEKLY_REQUEST_LIMIT
-    try:
-        return max(0, int(raw))
-    except ValueError:
-        return DEFAULT_WEEKLY_REQUEST_LIMIT
+    return HARD_WEEKLY_SERP_REQUEST_LIMIT
+
+
+def _is_weekly_limit_error(data: dict) -> bool:
+    err = data.get("error")
+    if not isinstance(err, str):
+        return False
+    return "weekly request limit" in err.lower()
 
 
 def _week_start_iso(d: date) -> str:
@@ -148,23 +171,34 @@ def _write_weekly_state(path: str, state: dict) -> None:
 
 
 def _reserve_weekly_request() -> bool:
-    limit = _serp_weekly_limit()
-    if limit <= 0:
-        return True
+    global _serp_week_gate_week, _serp_week_gate_closed, _serp_weekly_cap_warning_logged
 
+    limit = _serp_weekly_limit()
     path = _serp_weekly_state_path()
     today = datetime.now().date()
     week_start = _week_start_iso(today)
+
+    if week_start != _serp_week_gate_week:
+        _serp_week_gate_week = week_start
+        _serp_week_gate_closed = False
+        _serp_weekly_cap_warning_logged = False
+
+    if _serp_week_gate_closed:
+        return False
+
     state = _read_weekly_state(path)
 
     used = int(state.get("used", 0) or 0) if state.get("week_start") == week_start else 0
     if used >= limit:
-        logger.warning(
-            "[SerpAPI] Osiagnieto tygodniowy limit zapytan: %s/%s (tydzien od %s).",
-            used,
-            limit,
-            week_start,
-        )
+        if not _serp_weekly_cap_warning_logged:
+            logger.warning(
+                "[SerpAPI] Osiagnieto tygodniowy limit zapytan: %s/%s (tydzien od %s).",
+                used,
+                limit,
+                week_start,
+            )
+            _serp_weekly_cap_warning_logged = True
+        _serp_week_gate_closed = True
         return False
 
     state = {"week_start": week_start, "used": used + 1}
@@ -340,6 +374,8 @@ def _iter_local_results(data: dict) -> List[dict]:
 
 
 def _query_serpapi(api_key: str, query: str, start: int, num: int) -> dict:
+    if _serp_requests_disabled():
+        return {"organic_results": [], "local_results": [], "places_results": []}
     if not _reserve_weekly_request():
         return {
             "error": (
@@ -429,6 +465,13 @@ def collect_group(
                             query,
                             data.get("error"),
                         )
+                        if _is_weekly_limit_error(data):
+                            logger.warning(
+                                "[%s] Koniec zbierania w tej grupie — wyczerpano tygodniowy limit SerpAPI (%s).",
+                                group_name,
+                                _serp_weekly_limit(),
+                            )
+                            return rows[:target_count]
                         break
 
                     for local in _iter_local_results(data):
@@ -492,6 +535,11 @@ def main() -> None:
         help="Probuj pobrac e-mail z witryny firmy przez requests + BeautifulSoup",
     )
     parser.add_argument(
+        "--resume-xlsx",
+        default="",
+        help="Pomiń zbieranie: wczytaj wiersze z istniejącego .xlsx i kontynuuj odkrywanie/enrichment.",
+    )
+    parser.add_argument(
         "--output",
         default=os.path.join(
             os.path.expanduser("~"),
@@ -501,7 +549,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if _should_skip_serp_today():
+    resume_path = (args.resume_xlsx or "").strip()
+    serp_disabled = _serp_requests_disabled()
+    skip_public_from = _enrich_skip_public_search_from_index()
+
+    if _should_skip_serp_today() and not resume_path:
         logger.warning(
             "[SerpAPI] Dzienny limit: zapisano juz uruchomienie na dzis — pomijam zbieranie "
             "(plik stanu: %s). Uzyj istniejacego Excela lub folderu kontakty.",
@@ -514,7 +566,8 @@ def main() -> None:
         or os.environ.get("SERP_API_KEY", "")
         or os.environ.get("SERPAPI_KEY", "")
     )
-    if not api_key:
+    need_serp_client = not (resume_path and serp_disabled)
+    if not api_key and need_serp_client:
         logger.warning(
             "[SerpAPI] Brak klucza API (sprawdzono: SERPAPI_API_KEY, SERP_API_KEY, SERPAPI_KEY) "
             "— pomijam zbieranie. Pipeline uzyje pliku z outputu lub najnowszego "
@@ -522,7 +575,7 @@ def main() -> None:
         )
         raise SystemExit(2)
 
-    if GoogleSearch is None:
+    if GoogleSearch is None and need_serp_client:
         logger.warning(
             "[SerpAPI] Brak pakietu google-search-results — pomijam zbieranie "
             "(pip install google-search-results)."
@@ -532,44 +585,61 @@ def main() -> None:
     if not cities:
         cities = DEFAULT_TARGET_CITIES
 
-    firm_rows = collect_group(
-        api_key=api_key,
-        group_name="firmy",
-        keywords=FIRM_KEYWORDS,
-        cities=cities,
-        target_count=args.firm_target,
-        max_requests=args.max_requests_per_group,
-        request_sleep_s=args.sleep,
-        pages_per_query=args.pages_per_query,
-        num_per_request=args.num_per_request,
-    )
-    agency_rows = collect_group(
-        api_key=api_key,
-        group_name="agencje",
-        keywords=AGENCY_KEYWORDS,
-        cities=cities,
-        target_count=args.agency_target,
-        max_requests=args.max_requests_per_group,
-        request_sleep_s=args.sleep,
-        pages_per_query=args.pages_per_query,
-        num_per_request=args.num_per_request,
-    )
-    ecommerce_rows = collect_group(
-        api_key=api_key,
-        group_name="ecommerce",
-        keywords=ECOMMERCE_KEYWORDS,
-        cities=cities,
-        target_count=args.ecommerce_target,
-        max_requests=args.max_requests_per_group,
-        request_sleep_s=args.sleep,
-        pages_per_query=args.pages_per_query,
-        num_per_request=args.num_per_request,
-    )
-    for row in ecommerce_rows:
-        row["Branża"] = "Sklep internetowy / e-commerce"
-        row["Uwagi"] = (row.get("Uwagi", "") + " | Oferta współpracy B2B").strip(" |")
+    if resume_path:
+        if not os.path.isfile(resume_path):
+            logger.error("[SerpAPI] Brak pliku resume: %s", resume_path)
+            raise SystemExit(1)
+        df_resume = pd.read_excel(resume_path)
+        all_rows = df_resume.to_dict("records")
+        logger.info(
+            "[SerpAPI] Wznowiono z %s (%s wierszy). SerpAPI wyłączone: %s.",
+            resume_path,
+            len(all_rows),
+            serp_disabled,
+        )
+    else:
+        firm_rows = collect_group(
+            api_key=api_key,
+            group_name="firmy",
+            keywords=FIRM_KEYWORDS,
+            cities=cities,
+            target_count=args.firm_target,
+            max_requests=args.max_requests_per_group,
+            request_sleep_s=args.sleep,
+            pages_per_query=args.pages_per_query,
+            num_per_request=args.num_per_request,
+        )
+        agency_rows = collect_group(
+            api_key=api_key,
+            group_name="agencje",
+            keywords=AGENCY_KEYWORDS,
+            cities=cities,
+            target_count=args.agency_target,
+            max_requests=args.max_requests_per_group,
+            request_sleep_s=args.sleep,
+            pages_per_query=args.pages_per_query,
+            num_per_request=args.num_per_request,
+        )
+        ecommerce_rows = collect_group(
+            api_key=api_key,
+            group_name="ecommerce",
+            keywords=ECOMMERCE_KEYWORDS,
+            cities=cities,
+            target_count=args.ecommerce_target,
+            max_requests=args.max_requests_per_group,
+            request_sleep_s=args.sleep,
+            pages_per_query=args.pages_per_query,
+            num_per_request=args.num_per_request,
+        )
+        for row in ecommerce_rows:
+            row["Branża"] = "Sklep internetowy / e-commerce"
+            row["Uwagi"] = (row.get("Uwagi", "") + " | Oferta współpracy B2B").strip(" |")
 
-    all_rows = firm_rows + agency_rows + ecommerce_rows
+        all_rows = firm_rows + agency_rows + ecommerce_rows
+
+    if serp_disabled and resume_path:
+        args.no_discover_websites = True
+
     if not args.no_discover_websites:
         cache: Dict[str, str] = {}
         for i, row in enumerate(all_rows):
@@ -597,11 +667,14 @@ def main() -> None:
                 continue
             site = row.get("Strona WWW", "")
             if not site:
-                site = _find_public_contact_page(
-                    api_key=api_key,
-                    company=row.get("Firma", ""),
-                    city=row.get("Miasto", ""),
-                )
+                if skip_public_from is not None and i >= skip_public_from:
+                    site = ""
+                else:
+                    site = _find_public_contact_page(
+                        api_key=api_key,
+                        company=row.get("Firma", ""),
+                        city=row.get("Miasto", ""),
+                    )
                 row["Strona WWW"] = site
             row["E-mail rekrutacyjny"] = _extract_recruit_email_from_site(site)
             if i % 50 == 0 and i > 0:

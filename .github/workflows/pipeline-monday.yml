@@ -20,6 +20,7 @@ jobs:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
       SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.SERP_API_KEY || vars.SERPAPI_API_KEY }}
+      # Wysyłka dzienna; baza z niedzieli jest budowana z limitem ~200 zapytań SerpAPI (skrypt serpapi-sunday).
       MAX_EMAILS_PER_DAY: "40"
       DRY_RUN: "1"
       EXTRA_CONTACTS_DIR: ""
