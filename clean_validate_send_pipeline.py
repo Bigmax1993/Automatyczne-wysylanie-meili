@@ -1,3 +1,10 @@
+"""
+Główny etap pipeline: clean -> walidacja -> zapis CSV -> opcjonalna wysyłka.
+
+Skrypt czyta pliki kontaktów, porządkuje rekordy, waliduje je i przekazuje
+gotowe dane do warstwy mailingowej.
+"""
+
 import argparse
 import json
 import logging

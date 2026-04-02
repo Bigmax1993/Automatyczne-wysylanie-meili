@@ -1,3 +1,10 @@
+<#
+  Orkiestrator pipeline uruchamiany z PowerShell:
+  1) opcjonalne budowanie leadów przez SerpAPI,
+  2) clean/validate/send w Pythonie,
+  3) logowanie całego przebiegu do pliku.
+#>
+
 param(
     [switch]$SkipBuild,
     [switch]$DryRun
@@ -5,11 +12,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Katalog projektu i interpreter Pythona (domyślny lub z env).
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $pythonExe = "C:\Users\svinc\AppData\Local\Programs\Python\Python313\python.exe"
 if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
     $pythonExe = $env:PIPELINE_PYTHON_EXE.Trim()
 }
+# Standardowe ścieżki danych wej./wyj.
 $docsDir = Join-Path $env:USERPROFILE "Documents"
 $outputXlsx = Join-Path $docsDir "Kontakty_serpapi.xlsx"
 $outputCsv = Join-Path $docsDir "Kontakty_cleaned.csv"
@@ -43,6 +52,7 @@ $logPath = Join-Path $logsDir "pipeline_$stamp.log"
 "[$(Get-Date -Format s)] Start pipeline wersja=$pipelineVersion (SkipBuild=$SkipBuild DryRun=$DryRun)" | Out-File -FilePath $logPath -Encoding utf8
 
 $buildExit = 0
+# Etap 1: budowanie kontaktów (może być pominięte przez -SkipBuild).
 if (-not $SkipBuild) {
     # Jeden pelny przebieg SerpAPI na dzien (plik stanu w Documents\kontakty); przy braku API / limicie kod 2.
     $env:SERPAPI_DAILY_LIMIT_ENABLED = "1"
@@ -78,6 +88,7 @@ if (-not $SkipBuild) {
     }
 }
 
+# Etap 2: wybór wejścia dla clean/validate/send.
 $inputForClean = $outputXlsx
 if (-not (Test-Path -LiteralPath $inputForClean)) {
     if (Test-Path -LiteralPath $kontaktyDir) {
@@ -104,6 +115,7 @@ Write-Host "[pipeline] W tym samym przebiegu Python przetworzy tez pozostale pli
 Write-Host "         $kontaktyDir" -ForegroundColor DarkCyan
 Write-Host "         (pomija tylko plik, ktory jest glownym wejsciem, jesli lezy w tym folderze)." -ForegroundColor DarkCyan
 
+# Etap 3: uruchomienie głównego pipeline Python.
 $cleanArgs = @(
     "clean_validate_send_pipeline.py",
     "--input", $inputForClean,

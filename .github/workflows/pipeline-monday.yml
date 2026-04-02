@@ -1,0 +1,56 @@
+name: Monday Pipeline Run
+
+on:
+  schedule:
+    # 04:00 Europe/Warsaw (CEST, UTC+2) => 02:00 UTC
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-validate-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      MAX_EMAILS_PER_DAY: "40"
+      DRY_RUN: "1"
+      EXTRA_CONTACTS_DIR: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Verify Sunday contacts file exists
+        run: |
+          test -f generated/Kontakty_serpapi.xlsx || {
+            echo "Brak generated/Kontakty_serpapi.xlsx. Najpierw uruchom workflow SerpAPI."
+            exit 1
+          }
+
+      - name: Run clean/validate/send
+        run: |
+          python clean_validate_send_pipeline.py \
+            --input generated/Kontakty_serpapi.xlsx \
+            --output-csv generated/Kontakty_cleaned.csv \
+            --skip-extra-contacts \
+            --dry-run
+
+      - name: Upload cleaned CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kontakty-cleaned
+          path: generated/Kontakty_cleaned.csv
+          if-no-files-found: error

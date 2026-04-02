@@ -1,3 +1,10 @@
+"""
+Warstwa wysyłki wiadomości: personalizacja treści, SMTP Gmail i rejestr wysyłek.
+
+Moduł odpowiada za przygotowanie e-maili na podstawie danych kontaktowych,
+kontrolę limitów wysyłki oraz oznaczanie statusów w plikach wejściowych.
+"""
+
 import logging
 import os
 import re
@@ -66,7 +73,7 @@ MAIL_BODY_MIN_CHARS = int(os.environ.get("MAIL_BODY_MIN_CHARS", "400"))
 MAIL_BODY_MIN_SENTENCES = int(os.environ.get("MAIL_BODY_MIN_SENTENCES", "4"))
 MAIL_BODY_TEMPERATURE = float(os.environ.get("MAIL_BODY_TEMPERATURE", "0.55"))
 SMTP_MAX_RETRIES = int(os.environ.get("SMTP_MAX_RETRIES", "3"))
-MAX_EMAILS_PER_DAY = int(os.environ.get("MAX_EMAILS_PER_DAY", "100"))
+MAX_EMAILS_PER_DAY = int(os.environ.get("MAX_EMAILS_PER_DAY", "40"))
 MIN_DELAY_SECONDS = float(os.environ.get("MIN_DELAY_SECONDS", "20"))
 MAX_DELAY_SECONDS = float(os.environ.get("MAX_DELAY_SECONDS", "90"))
 FETCH_EMAIL_FROM_WEBSITE = os.environ.get("FETCH_EMAIL_FROM_WEBSITE", "0").lower() in {

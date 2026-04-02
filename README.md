@@ -63,7 +63,7 @@ Pełna lista i opisy: **`env.example`**.
 | `CV_PATH` | Opcjonalnie: PDF, ścieżka bez `.pdf` lub folder z PDF |
 | `OPENAI_MODEL` | Domyślnie `gpt-4o-mini` |
 | `DRY_RUN` | `1` / `true` — bez SMTP w warstwie Python |
-| `MAX_EMAILS_PER_DAY` | Limit dzienny (domyślnie `100`) |
+| `MAX_EMAILS_PER_DAY` | Limit dzienny (domyślnie `40`) |
 | `EXTRA_CONTACTS_DIR` | Folder z dodatkowymi `.xlsx`/`.csv` (domyślnie `Documents\kontakty`) |
 | `CAMPAIGN_LOG_ENABLED`, `CAMPAIGN_LOG_PATH` | Log kampanii CSV |
 | `PIPELINE_LOG_LEVEL`, `PIPELINE_LOG_TO_FILE`, `PIPELINE_LOG_FILE` | Logowanie Python (`logging`) |
@@ -144,6 +144,22 @@ if (Get-Command Invoke-Pester -ErrorAction SilentlyContinue) {
     Invoke-Pester -Path (Join-Path $proj "tests\powershell\RunWithEnv.Tests.ps1")
 }
 ```
+
+## GitHub Actions (harmonogram)
+
+Repo zawiera dwa workflow:
+
+- `serpapi-sunday.yml` - niedziela 21:00 (ustawione jako `0 19 * * 0` w UTC)  
+- `pipeline-monday.yml` - poniedziałek 04:00 (ustawione jako `0 2 * * 1` w UTC)
+
+Wymagane sekrety w repo (`Settings -> Secrets and variables -> Actions`):
+
+- `SERPAPI_API_KEY`
+- `OPENAI_API_KEY`
+- `GMAIL_APP_PASSWORD`
+- `GMAIL_SENDER_EMAIL`
+
+Uwaga: workflow poniedziałkowy uruchamia się domyślnie z `--dry-run` (bez realnej wysyłki SMTP).
 
 ## Dokumentacja dodatkowa
 

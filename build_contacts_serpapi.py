@@ -1,10 +1,18 @@
+"""
+Budowanie bazy kontaktów (leadów) z użyciem SerpAPI i zapis do arkusza Excel.
+
+Skrypt zbiera firmy/agencje/e-commerce, próbuje wzbogacić dane o e-mail oraz
+normalizuje rekordy do wspólnego formatu używanego przez dalszy pipeline.
+"""
+
 import argparse
+import json
 import logging
 import os
 import re
 import sys
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Dict, List
 from urllib.parse import urlparse
 
@@ -26,6 +34,7 @@ except Exception:  # pragma: no cover
 
 DEFAULT_TARGET_CITIES = ["Wroclaw", "Zielona Gora", "Poznan"]
 QUERY_SUFFIXES = ["", "praca", "rekrutacja", "kariera", "oferty pracy", "hr"]
+DEFAULT_WEEKLY_REQUEST_LIMIT = 200
 
 FIRM_KEYWORDS = [
     "Software house data BI",
@@ -94,6 +103,73 @@ def _serp_run_state_path() -> str:
     return os.path.abspath(
         os.path.join(os.path.expanduser("~"), "Documents", "kontakty", ".serpapi_last_run_date")
     )
+
+
+def _serp_weekly_state_path() -> str:
+    p = (os.environ.get("SERPAPI_WEEKLY_STATE_PATH") or "").strip()
+    if p:
+        return os.path.abspath(p)
+    return os.path.abspath(
+        os.path.join(os.path.expanduser("~"), "Documents", "kontakty", ".serpapi_weekly_usage.json")
+    )
+
+
+def _serp_weekly_limit() -> int:
+    raw = (os.environ.get("SERPAPI_WEEKLY_REQUEST_LIMIT") or "").strip()
+    if not raw:
+        return DEFAULT_WEEKLY_REQUEST_LIMIT
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return DEFAULT_WEEKLY_REQUEST_LIMIT
+
+
+def _week_start_iso(d: date) -> str:
+    return (d - timedelta(days=d.weekday())).isoformat()
+
+
+def _read_weekly_state(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_weekly_state(path: str, state: dict) -> None:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+
+def _reserve_weekly_request() -> bool:
+    limit = _serp_weekly_limit()
+    if limit <= 0:
+        return True
+
+    path = _serp_weekly_state_path()
+    today = datetime.now().date()
+    week_start = _week_start_iso(today)
+    state = _read_weekly_state(path)
+
+    used = int(state.get("used", 0) or 0) if state.get("week_start") == week_start else 0
+    if used >= limit:
+        logger.warning(
+            "[SerpAPI] Osiagnieto tygodniowy limit zapytan: %s/%s (tydzien od %s).",
+            used,
+            limit,
+            week_start,
+        )
+        return False
+
+    state = {"week_start": week_start, "used": used + 1}
+    _write_weekly_state(path, state)
+    return True
 
 
 def _read_serp_last_run_date(path: str) -> str:
@@ -264,6 +340,13 @@ def _iter_local_results(data: dict) -> List[dict]:
 
 
 def _query_serpapi(api_key: str, query: str, start: int, num: int) -> dict:
+    if not _reserve_weekly_request():
+        return {
+            "error": (
+                "SerpAPI weekly request limit reached "
+                f"({_serp_weekly_limit()} per week)."
+            )
+        }
     if GoogleSearch is None:
         raise RuntimeError(
             "Brak biblioteki serpapi. Zainstaluj: pip install google-search-results"
