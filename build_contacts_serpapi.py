@@ -509,11 +509,16 @@ def main() -> None:
         )
         raise SystemExit(2)
 
-    api_key = os.environ.get("SERPAPI_API_KEY", "")
+    api_key = (
+        os.environ.get("SERPAPI_API_KEY", "")
+        or os.environ.get("SERP_API_KEY", "")
+        or os.environ.get("SERPAPI_KEY", "")
+    )
     if not api_key:
         logger.warning(
-            "[SerpAPI] Brak SERPAPI_API_KEY — pomijam zbieranie. Pipeline uzyje pliku z outputu "
-            "lub najnowszego .xlsx/.xls/.csv z folderu kontakty."
+            "[SerpAPI] Brak klucza API (sprawdzono: SERPAPI_API_KEY, SERP_API_KEY, SERPAPI_KEY) "
+            "— pomijam zbieranie. Pipeline uzyje pliku z outputu lub najnowszego "
+            ".xlsx/.xls/.csv z folderu kontakty."
         )
         raise SystemExit(2)
 

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.SERP_API_KEY || vars.SERPAPI_API_KEY }}
       SERPAPI_DAILY_LIMIT_ENABLED: "0"
       SERPAPI_WEEKLY_REQUEST_LIMIT: "200"
     steps:
