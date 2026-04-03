@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 
@@ -168,6 +169,46 @@ def test_clean_and_validate_builds_required_output_columns(monkeypatch) -> None:
     for col in pipe.OUTPUT_COLUMNS:
         assert col in out.columns
     assert out.loc[0, "Walidacja"] == "OK"
+
+
+def test_pipeline_progress_every_n_invalid_env_defaults(monkeypatch) -> None:
+    monkeypatch.setenv("PIPELINE_PROGRESS_EVERY_N", "not-a-number")
+    assert pipe._pipeline_progress_every_n() == 50
+
+
+def test_pipeline_progress_every_n_zero_disables(monkeypatch) -> None:
+    monkeypatch.setenv("PIPELINE_PROGRESS_EVERY_N", "0")
+    assert pipe._pipeline_progress_every_n() == 0
+
+
+def test_clean_and_validate_logs_progress_every_n(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("PIPELINE_PROGRESS_EVERY_N", "2")
+    raw_df = pd.DataFrame(
+        [{"Firma": f"F{i}", "E-mail rekrutacyjny": f"a{i}@b.pl"} for i in range(5)]
+    )
+
+    def _fake_row(client, row_payload, model):
+        return {
+            cm.COL_COMPANY: row_payload.get("Firma", ""),
+            cm.COL_CITY: "Wroclaw",
+            cm.COL_INDUSTRY: "IT",
+            cm.COL_ROLE: "Data Analyst",
+            cm.COL_WEBSITE: "",
+            cm.COL_EMAIL: row_payload.get("E-mail rekrutacyjny", ""),
+            cm.COL_PHONE: "",
+            cm.COL_MODE: "UOP",
+            cm.COL_SOURCE: "x",
+            cm.COL_NOTES: "",
+        }
+
+    monkeypatch.setattr(pipe, "_clean_row_with_openai", _fake_row)
+
+    with caplog.at_level(logging.INFO):
+        pipe._clean_and_validate(raw_df, client=object(), model="x")
+
+    progress_msgs = [r.message for r in caplog.records if "Czyszczenie OpenAI" in r.message]
+    assert any("2/5" in m for m in progress_msgs)
+    assert any("4/5" in m for m in progress_msgs)
 
 
 def test_list_extra_contacts_files_excludes_main(tmp_path) -> None:

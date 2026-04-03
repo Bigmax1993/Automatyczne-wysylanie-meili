@@ -10,6 +10,17 @@ import pytest
 import build_contacts_serpapi as serp
 
 
+@pytest.fixture(autouse=True)
+def _isolate_serpapi_weekly_state_and_reset_gate(monkeypatch, tmp_path) -> None:
+    """Izolacja pliku tygodniowego limitu + reset globali między testami (deterministyczny CI)."""
+    p = tmp_path / "weekly_isolated.json"
+    monkeypatch.setenv("SERPAPI_WEEKLY_STATE_PATH", str(p))
+    p.write_text("{}", encoding="utf-8")
+    serp._serp_week_gate_week = ""
+    serp._serp_week_gate_closed = False
+    serp._serp_weekly_cap_warning_logged = False
+
+
 class _Resp:
     def __init__(self, text: str, status_code: int) -> None:
         self.text = text
@@ -303,7 +314,8 @@ def test_main_daily_limit_exits_2(monkeypatch, tmp_path) -> None:
 
 
 def test_main_missing_api_key_exits_2(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
+    for k in ("SERPAPI_API_KEY", "SERP_API_KEY", "SERPAPI_KEY"):
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("SERPAPI_DAILY_LIMIT_ENABLED", "0")
     monkeypatch.setattr(
         sys,
