@@ -32,10 +32,10 @@ jobs:
       # Tygodniowy limit zapytań SerpAPI (200) jest wymuszany w build_contacts_serpapi.py — nie ustawiaj tu „sufitu” przez env.
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -74,7 +74,7 @@ jobs:
           fi
 
       - name: Upload contacts artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: kontakty-serpapi
           path: generated/Kontakty_serpapi.xlsx

@@ -25,6 +25,19 @@ from excel_workbook_reader import read_excel_workbook
 
 logger = logging.getLogger(__name__)
 
+
+def _pipeline_progress_every_n() -> int:
+    """Co ile wierszy logować postęp (OpenAI clean / wysyłka). Domyślnie 50; 0 = wyłączone."""
+    raw = (os.environ.get("PIPELINE_PROGRESS_EVERY_N") or "50").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 50
+    if n <= 0:
+        return 0
+    return n
+
+
 CLEAN_SYSTEM_PROMPT = """Czyścisz rekordy kontaktów rekrutacyjnych.
 Zwracasz tylko poprawny JSON. Nie dodawaj komentarzy ani markdown.
 Nie wymyślaj faktów - używaj wyłącznie danych z wejścia.
@@ -216,7 +229,9 @@ def _validate_row(cleaned: Dict[str, str]) -> tuple[str, str]:
 
 def _clean_and_validate(df: pd.DataFrame, client: OpenAI, model: str) -> pd.DataFrame:
     out_rows = []
-    for _, row in df.iterrows():
+    total = len(df)
+    every = _pipeline_progress_every_n()
+    for i, (_, row) in enumerate(df.iterrows(), start=1):
         raw_payload = _build_raw_row_payload(row)
         cleaned = _clean_row_with_openai(client=client, row_payload=raw_payload, model=model)
         validation, notes = _validate_row(cleaned)
@@ -225,6 +240,8 @@ def _clean_and_validate(df: pd.DataFrame, client: OpenAI, model: str) -> pd.Data
         cleaned["Walidacja"] = validation
         cleaned["Uwagi walidacji"] = notes
         out_rows.append(cleaned)
+        if every and (i == 1 or i == total or i % every == 0):
+            logger.info("Czyszczenie OpenAI: %s/%s wierszy", i, total)
 
     out_df = pd.DataFrame(out_rows)
     for col in OUTPUT_COLUMNS:
@@ -246,7 +263,11 @@ def _run_validate_only_report(input_path: str) -> None:
         "domena_zablokowana": 0,
         "nadaje_sie_do_wysylki": 0,
     }
-    for _, row in df.iterrows():
+    total_v = len(df)
+    every_v = _pipeline_progress_every_n()
+    for i, (_, row) in enumerate(df.iterrows(), start=1):
+        if every_v and (i == 1 or i == total_v or i % every_v == 0):
+            logger.info("Walidacja offline (--validate-only): %s/%s wierszy", i, total_v)
         if has_walidacja and str(row.get("Walidacja", "")).strip().lower() != "ok":
             counts["walidacja_nie_ok"] += 1
             continue
@@ -298,7 +319,11 @@ def _send_from_cleaned_csv(
             smtp = smtplib.SMTP_SSL("smtp.gmail.com", 465)
             smtp.login(cm.SENDER_EMAIL, cm.password)
 
-        for idx, row in df.iterrows():
+        total_rows = len(df)
+        every_send = _pipeline_progress_every_n()
+        for pos, (idx, row) in enumerate(df.iterrows(), start=1):
+            if every_send and (pos == 1 or pos == total_rows or pos % every_send == 0):
+                logger.info("Przetwarzanie wierszy (wysyłka / dry-run): %s/%s", pos, total_rows)
             company_for_log = cm._row_value(row, col_map.get("company"), "(brak firmy)")
             if str(row.get("Walidacja", "")).strip().lower() != "ok":
                 stats["skipped"] += 1

@@ -15,6 +15,9 @@ env/
 dist/
 build/
 
+# Wygenerowane dane lokalne (CI / artefakty z Actions)
+generated/
+
 # Tests / tools
 .pytest_cache/
 .mypy_cache/
