@@ -20,7 +20,7 @@ on:
         default: ""
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   serpapi-build:
@@ -52,7 +52,7 @@ jobs:
           mkdir -p generated
           if [ "$JEDNORAZOWO_BEZ_SERP" = "1" ]; then
             test -f generated/Kontakty_serpapi.xlsx || {
-              echo "::error::Brak generated/Kontakty_serpapi.xlsx w repozytorium. Wgraj częściowy plik z poprzedniego runu (commit na main), potem uruchom ten tryb ponownie."
+              echo "::error::Brak generated/Kontakty_serpapi.xlsx. Dodaj plik do repozytorium (np. z poprzedniego artefaktu kontakty-serpapi z Actions) albo wgraj ręcznie do generated/, potem uruchom ten tryb ponownie."
               exit 1
             }
             python build_contacts_serpapi.py \
