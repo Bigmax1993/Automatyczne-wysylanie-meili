@@ -61,7 +61,7 @@ jobs:
             --dry-run
 
       - name: Upload cleaned CSV artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: kontakty-cleaned
           path: generated/Kontakty_cleaned.csv

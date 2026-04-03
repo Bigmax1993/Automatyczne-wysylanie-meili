@@ -74,7 +74,7 @@ jobs:
           fi
 
       - name: Upload contacts artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: kontakty-serpapi
           path: generated/Kontakty_serpapi.xlsx
