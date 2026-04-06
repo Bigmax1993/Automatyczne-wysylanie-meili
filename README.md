@@ -145,21 +145,24 @@ if (Get-Command Invoke-Pester -ErrorAction SilentlyContinue) {
 }
 ```
 
-## GitHub Actions (harmonogram)
+## GitHub Actions
 
-Repo zawiera dwa workflow:
+Jeden plik workflow: [`.github/workflows/main.yml`](.github/workflows/main.yml).
 
-- `serpapi-sunday.yml` - niedziela 21:00 (ustawione jako `0 19 * * 0` w UTC)  
-- `pipeline-monday.yml` - poniedziałek 04:00 (ustawione jako `0 2 * * 1` w UTC)
+| Zdarzenie | Co się dzieje |
+|-----------|----------------|
+| `push` / `pull_request` | Joby **test-python** (Ubuntu, pytest) i **test-powershell** (Windows, Pester). Pipeline **nie** startuje automatycznie. |
+| `workflow_dispatch` | Te same testy; opcjonalnie job **pipeline**, jeśli w formularzu ustawisz *Run pipeline job* na `true`. |
+| Harmonogram | Niedziela `0 19 * * 0` UTC — build SerpAPI (`serpapi-sunday`). Poniedziałek `0 2 * * 1` UTC — **pipeline** na runnerze Windows (domyślnie `-SkipBuild -DryRun`, bez realnej wysyłki SMTP). |
 
-Wymagane sekrety w repo (`Settings -> Secrets and variables -> Actions`):
+Wymagane sekrety w repo (`Settings` → `Secrets and variables` → `Actions`):
 
 - `SERPAPI_API_KEY`
 - `OPENAI_API_KEY`
 - `GMAIL_APP_PASSWORD`
 - `GMAIL_SENDER_EMAIL`
 
-Uwaga: workflow poniedziałkowy uruchamia się domyślnie z `--dry-run` (bez realnej wysyłki SMTP).
+Ręczne uruchomienie pipeline z Actions: *Actions* → *CI + Pipeline* → *Run workflow* → ustaw *Run pipeline job* na `true`; *dry_run* domyślnie `true` (bez SMTP), chyba że ustawisz inaczej.
 
 ## Dokumentacja dodatkowa
 
