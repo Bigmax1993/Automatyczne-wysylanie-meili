@@ -32,7 +32,26 @@ except Exception:  # pragma: no cover
     GoogleSearch = None  # type: ignore[assignment]
 
 
-DEFAULT_TARGET_CITIES = ["Wroclaw", "Zielona Gora", "Poznan"]
+DEFAULT_TARGET_CITIES = [
+    "Bialystok",
+    "Bydgoszcz",
+    "Gdansk",
+    "Gorzow Wielkopolski",
+    "Katowice",
+    "Kielce",
+    "Krakow",
+    "Lublin",
+    "Lodz",
+    "Olsztyn",
+    "Opole",
+    "Poznan",
+    "Rzeszow",
+    "Szczecin",
+    "Torun",
+    "Warszawa",
+    "Wroclaw",
+    "Zielona Gora",
+]
 QUERY_SUFFIXES = ["", "praca", "rekrutacja", "kariera", "oferty pracy", "hr"]
 # Twardy limit zapytań SerpAPI na tydzień (kalendarzowy ISO, pon–niedz.).
 # Nie podlega podniesieniu przez SERPAPI_WEEKLY_REQUEST_LIMIT ani wyłączeniu przez wartość <= 0.
@@ -517,7 +536,7 @@ def main() -> None:
     parser.add_argument("--ecommerce-target", type=int, default=1000)
     parser.add_argument(
         "--cities",
-        default="Wroclaw,Zielona Gora,Poznan",
+        default="Bialystok,Bydgoszcz,Gdansk,Gorzow Wielkopolski,Katowice,Kielce,Krakow,Lublin,Lodz,Olsztyn,Opole,Poznan,Rzeszow,Szczecin,Torun,Warszawa,Wroclaw,Zielona Gora",
         help="Lista miast rozdzielona przecinkami",
     )
     parser.add_argument("--max-requests-per-group", type=int, default=250)

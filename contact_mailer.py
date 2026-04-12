@@ -664,6 +664,21 @@ def _smtp_quit_safe(smtp: Optional[smtplib.SMTP_SSL]) -> None:
             pass
 
 
+def _resolved_cv_download_url() -> str:
+    """
+    Link do CV w promptach generowania treści (OpenAI).
+    Gdy zmienna CV_DOWNLOAD_URL nie jest ustawiona w środowisku — domyślny publiczny link.
+    Gdy CV_DOWNLOAD_URL jest ustawione na pusty string — bez linku w instrukcjach (tylko załącznik).
+    """
+    raw = os.environ.get("CV_DOWNLOAD_URL")
+    if raw is not None:
+        return str(raw).strip()
+    return (
+        "https://drive.google.com/file/d/15V22fA-VOlprVRW4fYyYFv_daHbolgyt/"
+        "view?usp=drive_link"
+    )
+
+
 def wygeneruj_tresc_maila(
     company: str,
     role: str,
@@ -681,6 +696,7 @@ def wygeneruj_tresc_maila(
     extra_user_instruction: str = "",
 ) -> str:
     loc = "de" if locale == "de" else "pl"
+    cv_url = _resolved_cv_download_url()
 
     src_pub = _public_source_for_mail_prompt(source)
     source_line_de = (
@@ -702,11 +718,18 @@ def wygeneruj_tresc_maila(
             if contract_preference == "B2B"
             else "- keine feste Vertragsform, wenn sich das aus den Daten nicht eindeutig ergibt"
         )
+        cv_goal_de = (
+            "- Sie bewerben sich auf die Stelle und signalisieren Interesse an einem Vorstellungsgespräch\n"
+            f"- Sie teilen mit, dass Sie den Lebenslauf im Anhang senden und auf diesen Download-Link verweisen; "
+            f"übernehmen Sie die URL exakt so in den Fließtext (Zeichen für Zeichen, nicht kürzen): {cv_url}"
+            if cv_url
+            else "- Sie bewerben sich auf die Stelle und signalisieren Interesse an einem Vorstellungsgespräch\n"
+            "- Sie teilen mit, dass Sie den Lebenslauf im Anhang senden"
+        )
         user_prompt = f"""Schreiben Sie eine ausführliche, personalisierte Bewerbungs-E-Mail auf Deutsch (mindestens 4–7 inhaltliche Sätze in 2–3 Absätzen, keine Einzeiler).
 
 Ziel:
-- Sie bewerben sich auf die Stelle und signalisieren Interesse an einem Vorstellungsgespräch
-- Sie teilen mit, dass Sie den Lebenslauf im Anhang senden
+{cv_goal_de}
 
 Daten Firma/Stelle (ausschließlich diese Angaben für den Fließtext verwenden, nichts dazuerfinden):
 - Firma: {company}
@@ -753,11 +776,18 @@ Anforderungen:
             if contract_preference == "B2B"
             else "- nie deklaruj formy współpracy, jeśli nie wynika jasno z danych"
         )
+        cv_goal_pl = (
+            "- aplikuję na stanowisko i wyrażam zainteresowanie rozmową rekrutacyjną\n"
+            f"- informuję, że w załączniku przesyłam CV oraz podaję link do pobrania; w treści maila umieść dokładnie ten adres URL "
+            f"(znak w znak, bez skracania): {cv_url}"
+            if cv_url
+            else "- aplikuję na stanowisko i wyrażam zainteresowanie rozmową rekrutacyjną\n"
+            "- informuję, że w załączniku przesyłam CV"
+        )
         user_prompt = f"""Napisz treściwy, spersonalizowany e-mail aplikacyjny po polsku (co najmniej 4–7 pełnych zdań w 2–3 akapitach; same pozdrowienia bez treści merytorycznej są niedopuszczalne).
 
 Mój cel:
-- aplikuję na stanowisko i wyrażam zainteresowanie rozmową rekrutacyjną
-- informuję, że w załączniku przesyłam CV
+{cv_goal_pl}
 
 Dane firmy i oferty (tylko te pola do treści maila — niczego nie dopowiadaj):
 - firma: {company}

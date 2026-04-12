@@ -42,7 +42,7 @@ $env:SERPAPI_DAILY_LIMIT_ENABLED = "1"
     "--firm-target" "1000" `
     "--agency-target" "1000" `
     "--ecommerce-target" "1000" `
-    "--cities" "Wroclaw,Zielona Gora,Poznan" `
+    "--cities" "Bialystok,Bydgoszcz,Gdansk,Gorzow Wielkopolski,Katowice,Kielce,Krakow,Lublin,Lodz,Olsztyn,Opole,Poznan,Rzeszow,Szczecin,Torun,Warszawa,Wroclaw,Zielona Gora" `
     "--max-requests-per-group" "800" `
     "--pages-per-query" "6" `
     "--num-per-request" "20" `
