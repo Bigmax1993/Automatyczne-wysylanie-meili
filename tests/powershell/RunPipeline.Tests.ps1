@@ -7,11 +7,29 @@
 # Jesli masz tylko Pester 3 z Program Files, powyzsze zadziala.
 # Pester 5 (CurrentUser, nowsza skladnia): Install-Module Pester -MinimumVersion 5.0 -Scope CurrentUser -Force
 
-Describe "run_pipeline.ps1" {
-    BeforeAll {
-        $proj = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-        $script:RunPipelinePath = Join-Path $proj "run_pipeline.ps1"
+# Root repozytorium: na CI ustaw REPO_ROOT (workflow) lub GITHUB_WORKSPACE; lokalnie tests/powershell -> ../..
+$__proj = $null
+foreach ($__k in @("REPO_ROOT", "GITHUB_WORKSPACE")) {
+    $__v = [Environment]::GetEnvironmentVariable($__k)
+    if (-not [string]::IsNullOrWhiteSpace($__v)) {
+        $__proj = $__v.Trim()
+        break
     }
+}
+if ([string]::IsNullOrWhiteSpace($__proj)) {
+    $__here = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($__here)) {
+        if ($MyInvocation.MyCommand.Path) {
+            $__here = Split-Path -Parent $MyInvocation.MyCommand.Path
+        } else {
+            throw "Nie mozna ustalic katalogu projektu (ustaw REPO_ROOT / GITHUB_WORKSPACE albo uruchom z pliku .Tests.ps1)."
+        }
+    }
+    $__proj = (Resolve-Path (Join-Path $__here "..\..")).Path
+}
+$script:RunPipelinePath = Join-Path $__proj "run_pipeline.ps1"
+
+Describe "run_pipeline.ps1" {
 
     It "istnieje" {
         Test-Path -LiteralPath $script:RunPipelinePath | Should Be $true

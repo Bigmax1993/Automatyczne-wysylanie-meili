@@ -72,14 +72,25 @@ jobs:
 
       - name: Run Pester tests
         shell: pwsh
+        env:
+          # Jawny root repozytorium dla testow (PSScriptRoot w Pester/pwsh bywa zawodny).
+          REPO_ROOT: ${{ github.workspace }}
         run: |
+          $ProgressPreference = "SilentlyContinue"
           Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
           # pwsh ma czesto Pester 5 z legacy Should (Should Be) wylaczonym — testy uzywaja skladni Pester 3/4.
           Install-Module Pester -RequiredVersion 4.10.1 -Force -SkipPublisherCheck -Scope CurrentUser -AllowClobber
           Remove-Module Pester -Force -ErrorAction SilentlyContinue
           Import-Module Pester -RequiredVersion 4.10.1 -Force
-          Invoke-Pester -Path ".\tests\powershell\RunPipeline.Tests.ps1"
-          Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1"
+          if ((Get-Module Pester).Version.ToString() -ne "4.10.1") {
+            throw "Oczekiwano Pester 4.10.1, jest: $((Get-Module Pester).Version)"
+          }
+          Set-Location -LiteralPath $env:REPO_ROOT
+          $r1 = Invoke-Pester -Path ".\tests\powershell\RunPipeline.Tests.ps1" -PassThru
+          $r2 = Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1" -PassThru
+          $failed = [int]$r1.FailedCount + [int]$r2.FailedCount
+          if ($failed -gt 0) { exit $failed }
 
   serpapi-sunday:
     if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0'

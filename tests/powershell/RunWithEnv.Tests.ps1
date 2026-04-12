@@ -3,11 +3,28 @@
 #
 #   Invoke-Pester -Path .\tests\powershell\RunWithEnv.Tests.ps1
 
-Describe "run_with_env.ps1" {
-    BeforeAll {
-        $proj = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-        $script:RunWithEnvPath = Join-Path $proj "run_with_env.ps1"
+$__proj = $null
+foreach ($__k in @("REPO_ROOT", "GITHUB_WORKSPACE")) {
+    $__v = [Environment]::GetEnvironmentVariable($__k)
+    if (-not [string]::IsNullOrWhiteSpace($__v)) {
+        $__proj = $__v.Trim()
+        break
     }
+}
+if ([string]::IsNullOrWhiteSpace($__proj)) {
+    $__here = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($__here)) {
+        if ($MyInvocation.MyCommand.Path) {
+            $__here = Split-Path -Parent $MyInvocation.MyCommand.Path
+        } else {
+            throw "Nie mozna ustalic katalogu projektu (ustaw REPO_ROOT / GITHUB_WORKSPACE albo uruchom z pliku .Tests.ps1)."
+        }
+    }
+    $__proj = (Resolve-Path (Join-Path $__here "..\..")).Path
+}
+$script:RunWithEnvPath = Join-Path $__proj "run_with_env.ps1"
+
+Describe "run_with_env.ps1" {
 
     It "istnieje" {
         Test-Path -LiteralPath $script:RunWithEnvPath | Should Be $true
