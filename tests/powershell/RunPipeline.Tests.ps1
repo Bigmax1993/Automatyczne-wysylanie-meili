@@ -7,19 +7,21 @@
 # Jesli masz tylko Pester 3 z Program Files, powyzsze zadziala.
 # Pester 5 (CurrentUser, nowsza skladnia): Install-Module Pester -MinimumVersion 5.0 -Scope CurrentUser -Force
 
-$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$RunPipelinePath = Join-Path $ProjectRoot "run_pipeline.ps1"
-
 Describe "run_pipeline.ps1" {
+    BeforeAll {
+        $proj = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+        $script:RunPipelinePath = Join-Path $proj "run_pipeline.ps1"
+    }
+
     It "istnieje" {
-        Test-Path -LiteralPath $RunPipelinePath | Should Be $true
+        Test-Path -LiteralPath $script:RunPipelinePath | Should Be $true
     }
 
     It "parsuje sie bez bledow (Language.Parser)" {
         $tokens = $null
         $errors = $null
         [void][System.Management.Automation.Language.Parser]::ParseFile(
-            $RunPipelinePath,
+            $script:RunPipelinePath,
             [ref]$tokens,
             [ref]$errors
         )
@@ -30,17 +32,17 @@ Describe "run_pipeline.ps1" {
     }
 
     It "ustawia projectDir przez MyInvocation" {
-        $raw = Get-Content -LiteralPath $RunPipelinePath -Raw
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
         $raw | Should Match 'Split-Path\s+-Parent\s+\$MyInvocation\.MyCommand\.Path'
     }
 
     It "ma PIPELINE_PYTHON_EXE" {
-        $raw = Get-Content -LiteralPath $RunPipelinePath -Raw
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
         $raw | Should Match 'PIPELINE_PYTHON_EXE'
     }
 
     It "ma Continue + finally przy wywolaniu clean_validate" {
-        $raw = Get-Content -LiteralPath $RunPipelinePath -Raw
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
         $raw | Should Match 'clean_validate_send_pipeline\.py'
         $raw | Should Match '\$ErrorActionPreference\s*=\s*"Continue"'
         $raw | Should Match '\$prevEap'

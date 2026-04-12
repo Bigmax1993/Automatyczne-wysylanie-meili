@@ -3,19 +3,21 @@
 #
 #   Invoke-Pester -Path .\tests\powershell\RunWithEnv.Tests.ps1
 
-$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$RunWithEnvPath = Join-Path $ProjectRoot "run_with_env.ps1"
-
 Describe "run_with_env.ps1" {
+    BeforeAll {
+        $proj = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+        $script:RunWithEnvPath = Join-Path $proj "run_with_env.ps1"
+    }
+
     It "istnieje" {
-        Test-Path -LiteralPath $RunWithEnvPath | Should Be $true
+        Test-Path -LiteralPath $script:RunWithEnvPath | Should Be $true
     }
 
     It "parsuje sie bez bledow (Language.Parser)" {
         $tokens = $null
         $errors = $null
         [void][System.Management.Automation.Language.Parser]::ParseFile(
-            $RunWithEnvPath,
+            $script:RunWithEnvPath,
             [ref]$tokens,
             [ref]$errors
         )
@@ -26,14 +28,14 @@ Describe "run_with_env.ps1" {
     }
 
     It "laczy zmienne z profilu User" {
-        $raw = Get-Content -LiteralPath $RunWithEnvPath -Raw
+        $raw = Get-Content -LiteralPath $script:RunWithEnvPath -Raw
         $raw | Should Match 'GetEnvironmentVariable'
         $raw | Should Match 'GMAIL_APP_PASSWORD'
         $raw | Should Match 'Normalize-GmailAppPassword'
     }
 
     It "ma Assert-OpenAiKey i prog Gmail 16 znakow" {
-        $raw = Get-Content -LiteralPath $RunWithEnvPath -Raw
+        $raw = Get-Content -LiteralPath $script:RunWithEnvPath -Raw
         $raw | Should Match 'Assert-OpenAiKey'
         $raw | Should Match '16'
     }
