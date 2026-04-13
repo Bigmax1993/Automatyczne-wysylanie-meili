@@ -322,12 +322,7 @@ def test_main_daily_limit_exits_2(monkeypatch, tmp_path) -> None:
 
 
 def test_main_missing_api_key_exits_2(monkeypatch, tmp_path) -> None:
-<<<<<<< HEAD
-    for k in ("SERPAPI_API_KEY", "SERP_API_KEY", "SERPAPI_KEY"):
-        monkeypatch.delenv(k, raising=False)
-=======
     _clear_serp_api_key_env(monkeypatch)
->>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
     monkeypatch.setenv("SERPAPI_DAILY_LIMIT_ENABLED", "0")
     monkeypatch.setattr(
         sys,

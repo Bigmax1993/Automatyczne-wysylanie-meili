@@ -1,4 +1,4 @@
-name: CI + Pipeline
+﻿name: CI + Pipeline
 
 permissions:
   contents: read
@@ -63,38 +63,6 @@ jobs:
           DRY_RUN: "1"
         run: python -m pytest tests -v --tb=short
 
-<<<<<<< HEAD
-  test-powershell:
-    runs-on: windows-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Pester tests
-        shell: pwsh
-        env:
-          # Jawny root repozytorium dla testow (PSScriptRoot w Pester/pwsh bywa zawodny).
-          REPO_ROOT: ${{ github.workspace }}
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          Set-StrictMode -Version Latest
-          $ErrorActionPreference = "Stop"
-          # pwsh ma czesto Pester 5 z legacy Should (Should Be) wylaczonym — testy uzywaja skladni Pester 3/4.
-          Install-Module Pester -RequiredVersion 4.10.1 -Force -SkipPublisherCheck -Scope CurrentUser -AllowClobber
-          Remove-Module Pester -Force -ErrorAction SilentlyContinue
-          Import-Module Pester -RequiredVersion 4.10.1 -Force
-          if ((Get-Module Pester).Version.ToString() -ne "4.10.1") {
-            throw "Oczekiwano Pester 4.10.1, jest: $((Get-Module Pester).Version)"
-          }
-          Set-Location -LiteralPath $env:REPO_ROOT
-          $r1 = Invoke-Pester -Path ".\tests\powershell\RunPipeline.Tests.ps1" -PassThru
-          $r2 = Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1" -PassThru
-          $failed = [int]$r1.FailedCount + [int]$r2.FailedCount
-          if ($failed -gt 0) { exit $failed }
-
-=======
->>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
   serpapi-sunday:
     if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0'
     runs-on: ubuntu-latest
@@ -125,15 +93,9 @@ jobs:
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline == 'true') ||
       (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
-<<<<<<< HEAD
-    runs-on: windows-latest
-    timeout-minutes: 45
-    needs: [test-python, test-powershell]
-=======
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [test-python]
->>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,29 +107,11 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-<<<<<<< HEAD
-        shell: pwsh
-=======
->>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Prepare input sample
-<<<<<<< HEAD
-        shell: pwsh
-        run: |
-          $docsDir = Join-Path $env:USERPROFILE "Documents"
-          $kontaktyDir = Join-Path $docsDir "kontakty"
-          New-Item -ItemType Directory -Path $kontaktyDir -Force | Out-Null
-          @"
-          company_name,email,phone,url,source_query
-          Test Company,test@example.com,,https://example.com,test query
-          "@ | Out-File -FilePath (Join-Path $kontaktyDir "sample.csv") -Encoding utf8
-
-      - name: Run pipeline
-        shell: pwsh
-=======
         run: |
           set -euo pipefail
           kontakty_dir="${HOME}/Documents/kontakty"
@@ -178,26 +122,11 @@ jobs:
             > "${kontakty_dir}/sample.csv"
 
       - name: Run pipeline
->>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-<<<<<<< HEAD
-          PIPELINE_PYTHON_EXE: python
-        run: |
-          $skipBuild = "-SkipBuild"
-          $dryRun = "-DryRun"
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ github.event.inputs.skip_build }}" -eq "false") { $skipBuild = "" }
-            if ("${{ github.event.inputs.dry_run }}" -eq "false") { $dryRun = "" }
-          }
-          $args = @()
-          if ($skipBuild) { $args += $skipBuild }
-          if ($dryRun) { $args += $dryRun }
-          ./run_pipeline.ps1 @args
-=======
         run: |
           set -euo pipefail
           docs_dir="${HOME}/Documents"
@@ -264,4 +193,3 @@ jobs:
             --output-csv "${out_csv}" \
             --extra-contacts-dir "${kontakty_dir}" \
             "${dry_flag[@]}"
->>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
