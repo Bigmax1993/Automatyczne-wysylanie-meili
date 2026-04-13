@@ -69,6 +69,13 @@ def test_run_with_env_merges_user_env_for_keys() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="tresc PS1")
+def test_run_with_env_resolves_python_like_run_pipeline() -> None:
+    raw = RUN_WITH_ENV.read_text(encoding="utf-8")
+    assert "PIPELINE_PYTHON_EXE" in raw
+    assert "Get-Command" in raw
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="tresc PS1")
 def test_run_with_env_dot_sources_local_env() -> None:
     raw = RUN_WITH_ENV.read_text(encoding="utf-8")
     assert ". $localEnvPath" in raw

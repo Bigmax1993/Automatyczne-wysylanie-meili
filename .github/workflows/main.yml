@@ -63,6 +63,7 @@ jobs:
           DRY_RUN: "1"
         run: python -m pytest tests -v --tb=short
 
+<<<<<<< HEAD
   test-powershell:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -92,6 +93,8 @@ jobs:
           $failed = [int]$r1.FailedCount + [int]$r2.FailedCount
           if ($failed -gt 0) { exit $failed }
 
+=======
+>>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
   serpapi-sunday:
     if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0'
     runs-on: ubuntu-latest
@@ -122,9 +125,15 @@ jobs:
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline == 'true') ||
       (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
+<<<<<<< HEAD
     runs-on: windows-latest
     timeout-minutes: 45
     needs: [test-python, test-powershell]
+=======
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [test-python]
+>>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,12 +145,16 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+<<<<<<< HEAD
         shell: pwsh
+=======
+>>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Prepare input sample
+<<<<<<< HEAD
         shell: pwsh
         run: |
           $docsDir = Join-Path $env:USERPROFILE "Documents"
@@ -154,11 +167,24 @@ jobs:
 
       - name: Run pipeline
         shell: pwsh
+=======
+        run: |
+          set -euo pipefail
+          kontakty_dir="${HOME}/Documents/kontakty"
+          mkdir -p "${kontakty_dir}"
+          printf '%s\n' \
+            'company_name,email,phone,url,source_query' \
+            'Test Company,test@example.com,,https://example.com,test query' \
+            > "${kontakty_dir}/sample.csv"
+
+      - name: Run pipeline
+>>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+<<<<<<< HEAD
           PIPELINE_PYTHON_EXE: python
         run: |
           $skipBuild = "-SkipBuild"
@@ -171,3 +197,71 @@ jobs:
           if ($skipBuild) { $args += $skipBuild }
           if ($dryRun) { $args += $dryRun }
           ./run_pipeline.ps1 @args
+=======
+        run: |
+          set -euo pipefail
+          docs_dir="${HOME}/Documents"
+          kontakty_dir="${docs_dir}/kontakty"
+          out_xlsx="${docs_dir}/Kontakty_serpapi.xlsx"
+          out_csv="${docs_dir}/Kontakty_cleaned.csv"
+          mkdir -p "${kontakty_dir}"
+
+          skip_build="true"
+          dry_run="true"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.skip_build }}" = "false" ]; then skip_build="false"; fi
+            if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then dry_run="false"; fi
+          fi
+
+          if [ "${skip_build}" = "false" ]; then
+            export SERPAPI_DAILY_LIMIT_ENABLED="1"
+            set +e
+            python build_contacts_serpapi.py \
+              --firm-target "1000" \
+              --agency-target "1000" \
+              --ecommerce-target "1000" \
+              --cities "Bialystok,Bydgoszcz,Gdansk,Gorzow Wielkopolski,Katowice,Kielce,Krakow,Lublin,Lodz,Olsztyn,Opole,Poznan,Rzeszow,Szczecin,Torun,Warszawa,Wroclaw,Zielona Gora" \
+              --max-requests-per-group "800" \
+              --pages-per-query "6" \
+              --num-per-request "20" \
+              --enrich-email \
+              --output "${out_xlsx}"
+            build_exit=$?
+            set -e
+            if [ "${build_exit}" -eq 2 ]; then
+              echo "[pipeline] SerpAPI pominiety (limit dzienny lub brak klucza/biblioteki) kod=2"
+            elif [ "${build_exit}" -ne 0 ]; then
+              echo "[pipeline] SerpAPI zwrocil blad (${build_exit}) — jesli brak pliku wyjsciowego, uzyje folderu kontakty."
+            fi
+          fi
+
+          input_for_clean=""
+          if [ -f "${out_xlsx}" ]; then
+            input_for_clean="${out_xlsx}"
+          else
+            shopt -s nullglob
+            best_ts=0
+            for f in "${kontakty_dir}"/*.csv "${kontakty_dir}"/*.xlsx "${kontakty_dir}"/*.xls "${kontakty_dir}"/*.XLSX; do
+              [ -f "${f}" ] || continue
+              ts="$(stat -c %Y "${f}")"
+              if [ "${ts}" -ge "${best_ts}" ]; then best_ts="${ts}"; input_for_clean="${f}"; fi
+            done
+            shopt -u nullglob
+          fi
+
+          if [ -z "${input_for_clean}" ] || [ ! -f "${input_for_clean}" ]; then
+            echo "Brak pliku wejsciowego: nie znaleziono ${out_xlsx} ani zadnego .xlsx/.xls/.csv w katalogu: ${kontakty_dir}"
+            exit 1
+          fi
+
+          echo "[pipeline] Wejscie: ${input_for_clean}"
+
+          dry_flag=()
+          if [ "${dry_run}" = "true" ]; then dry_flag=(--dry-run); fi
+
+          python clean_validate_send_pipeline.py \
+            --input "${input_for_clean}" \
+            --output-csv "${out_csv}" \
+            --extra-contacts-dir "${kontakty_dir}" \
+            "${dry_flag[@]}"
+>>>>>>> 5d5ea17 (Usuń PowerShell z pipeline CI oraz popraw uruchamianie skryptów i testów regresyjnych.)

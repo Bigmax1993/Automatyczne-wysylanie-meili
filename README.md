@@ -61,6 +61,7 @@ Pełna lista i opisy: **`env.example`**.
 | `SENDER_EMAIL` | Alternatywa dla `GMAIL_SENDER_EMAIL` (niższy priorytet niż `GMAIL_SENDER_EMAIL`) |
 | `SERPAPI_API_KEY` | Do `build_contacts_serpapi.py` (pomijane przy `-SkipBuild`) |
 | `CV_PATH` | Opcjonalnie: PDF, ścieżka bez `.pdf` lub folder z PDF |
+| `CV_DOWNLOAD_URL` | Opcjonalnie: link do CV doklejany na końcu treści maila |
 | `OPENAI_MODEL` | Domyślnie `gpt-4o-mini` |
 | `DRY_RUN` | `1` / `true` — bez SMTP w warstwie Python |
 | `MAX_EMAILS_PER_DAY` | Limit dzienny (domyślnie `40`) |
@@ -108,6 +109,8 @@ Zmienne: `SENT_MAIL_REGISTRY_ENABLED`, `SENT_MAIL_REGISTRY_DIR`, `SENT_MAIL_REGI
 ## CV
 
 Szukane są m.in. wzorce `CV*.pdf` w `Documents` oraz w podfolderach **`CV`**, `cv`, `Curriculum`, `Resume`, `resumes`. Można wymusić ścieżkę przez `CV_PATH`.
+
+Opcjonalnie ustaw `CV_DOWNLOAD_URL`, aby na końcu treści każdego maila dodać link do CV (np. Google Drive).
 
 ## SerpAPI (zbiór leadów)
 

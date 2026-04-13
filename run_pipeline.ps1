@@ -12,11 +12,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Katalog projektu i interpreter Pythona (domyślny lub z env).
+# Katalog projektu i interpreter Pythona (PIPELINE_PYTHON_EXE lub pierwszy python z PATH).
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pythonExe = "C:\Users\svinc\AppData\Local\Programs\Python\Python313\python.exe"
-if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
-    $pythonExe = $env:PIPELINE_PYTHON_EXE.Trim()
+$pythonExe = if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
+    $env:PIPELINE_PYTHON_EXE.Trim()
+} else {
+    "python"
+}
+try {
+    $pythonExe = (Get-Command -Name $pythonExe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+} catch {
+    throw "Nie znaleziono interpretera Python: ustaw PIPELINE_PYTHON_EXE albo dodaj python.exe do PATH."
 }
 # Standardowe ścieżki danych wej./wyj.
 $docsDir = Join-Path $env:USERPROFILE "Documents"
@@ -35,10 +41,6 @@ $versionPath = Join-Path $projectDir "VERSION"
 $pipelineVersion = "unknown"
 if (Test-Path $versionPath) {
     $pipelineVersion = (Get-Content -LiteralPath $versionPath -Raw).Trim()
-}
-
-if (-not (Test-Path $pythonExe)) {
-    throw "Nie znaleziono interpretera Python: $pythonExe"
 }
 
 $logsDir = Join-Path $docsDir "pipeline_logs"
