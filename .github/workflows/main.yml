@@ -115,11 +115,14 @@ jobs:
         run: |
           set -euo pipefail
           kontakty_dir="${HOME}/Documents/kontakty"
+          docs_dir="${HOME}/Documents"
           mkdir -p "${kontakty_dir}"
           printf '%s\n' \
             'company_name,email,phone,url,source_query' \
             'Test Company,test@example.com,,https://example.com,test query' \
             > "${kontakty_dir}/sample.csv"
+          # Minimalny PDF, aby pipeline nie wymagał lokalnego CV_PATH z maszyny deweloperskiej.
+          printf '%%PDF-1.4\n%%EOF\n' > "${docs_dir}/cv-ci.pdf"
 
       - name: Run pipeline
         env:
@@ -127,12 +130,14 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+          CV_DOWNLOAD_URL: "https://drive.google.com/file/d/15V22fA-VOlprVRW4fYyYFv_daHbolgyt/view?usp=drive_link"
         run: |
           set -euo pipefail
           docs_dir="${HOME}/Documents"
           kontakty_dir="${docs_dir}/kontakty"
           out_xlsx="${docs_dir}/Kontakty_serpapi.xlsx"
           out_csv="${docs_dir}/Kontakty_cleaned.csv"
+          export CV_PATH="${docs_dir}/cv-ci.pdf"
           mkdir -p "${kontakty_dir}"
 
           skip_build="true"
