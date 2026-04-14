@@ -26,9 +26,9 @@ on:
   workflow_dispatch:
     inputs:
       run_pipeline:
-        description: "Run pipeline job in this workflow"
+        description: "Legacy switch (pipeline now runs on every manual run)"
         required: false
-        default: "false"
+        default: "true"
         type: choice
         options: ["false", "true"]
       skip_build:
@@ -133,8 +133,8 @@ jobs:
     if: |
       github.ref == 'refs/heads/main' &&
       (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline == 'true') ||
-      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
       ) &&
       needs.test-python.result == 'success' &&
       needs.test-powershell.result == 'success' &&
