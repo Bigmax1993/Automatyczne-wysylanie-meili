@@ -46,10 +46,7 @@ def resolve_sender_email(environ: Optional[Mapping[str, str]] = None) -> str:
 
 
 SENDER_EMAIL = resolve_sender_email()
-SEARCH_DIR = os.environ.get(
-    "SEARCH_DIR",
-    os.path.join(os.path.expanduser("~"), "Documents"),
-)
+SEARCH_DIR = r"C:\Users\svinc\Documents"
 PATTERN = "Kontakty*.xlsx"
 
 COL_COMPANY = "Firma"
@@ -76,10 +73,9 @@ MAIL_BODY_MIN_CHARS = int(os.environ.get("MAIL_BODY_MIN_CHARS", "400"))
 MAIL_BODY_MIN_SENTENCES = int(os.environ.get("MAIL_BODY_MIN_SENTENCES", "4"))
 MAIL_BODY_TEMPERATURE = float(os.environ.get("MAIL_BODY_TEMPERATURE", "0.55"))
 SMTP_MAX_RETRIES = int(os.environ.get("SMTP_MAX_RETRIES", "3"))
-MAX_EMAILS_PER_DAY = int(os.environ.get("MAX_EMAILS_PER_DAY", "40"))
+MAX_EMAILS_PER_DAY = int(os.environ.get("MAX_EMAILS_PER_DAY", "200"))
 MIN_DELAY_SECONDS = float(os.environ.get("MIN_DELAY_SECONDS", "20"))
 MAX_DELAY_SECONDS = float(os.environ.get("MAX_DELAY_SECONDS", "90"))
-CV_DOWNLOAD_URL = os.environ.get("CV_DOWNLOAD_URL", "").strip()
 FETCH_EMAIL_FROM_WEBSITE = os.environ.get("FETCH_EMAIL_FROM_WEBSITE", "0").lower() in {
     "1",
     "true",
@@ -521,21 +517,6 @@ def _attach_cv(msg: EmailMessage, cv_path: str) -> None:
         subtype="pdf",
         filename=os.path.basename(cv_path),
     )
-
-
-def _append_cv_download_url(body: str, locale: str) -> str:
-    url = CV_DOWNLOAD_URL.strip()
-    if not url:
-        return body
-    line = (
-        f"Link do CV (Google Drive): {url}"
-        if locale != "de"
-        else f"Lebenslauf-Link (Google Drive): {url}"
-    )
-    content = (body or "").rstrip()
-    if not content:
-        return line
-    return f"{content}\n\n{line}"
 
 
 def _build_row_context(row: pd.Series) -> str:
@@ -1254,7 +1235,6 @@ def _process_rows(
                 contract_preference=contract_preference,
                 locale=mail_locale,
             )
-            tresc = _append_cv_download_url(tresc, mail_locale)
         except Exception as e:
             stats["openai_errors"] += 1
             df.at[idx, STATUS_COL] = _safe_status(f"Błąd OpenAI: {e}")

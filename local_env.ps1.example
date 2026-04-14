@@ -21,7 +21,7 @@ $env:CV_DOWNLOAD_URL = "https://drive.google.com/file/d/1OvufYsYu2qzSI0JOjIcjPUJ
 
 # Opcjonalnie:
 # $env:OPENAI_MODEL = "gpt-4o-mini"
-# $env:MAX_EMAILS_PER_DAY = "40"
+# $env:MAX_EMAILS_PER_DAY = "200"
 # $env:CAMPAIGN_LOG_ENABLED = "1"
 # $env:PIPELINE_LOG_TO_FILE = "1"
 # $env:PIPELINE_JSON_BACKUP = "1"

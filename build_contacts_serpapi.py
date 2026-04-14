@@ -459,19 +459,22 @@ def collect_group(
     seen = set()
     requests = 0
     city_scope = list(cities)
+    unlimited_requests = max_requests <= 0
 
     for keyword in keywords:
         for city in city_scope:
-            if len(rows) >= target_count or requests >= max_requests:
+            if len(rows) >= target_count or (not unlimited_requests and requests >= max_requests):
                 break
 
             query_variants = [f"{keyword} {city} {suffix}".strip() for suffix in QUERY_SUFFIXES]
             for query in query_variants:
-                if len(rows) >= target_count or requests >= max_requests:
+                if len(rows) >= target_count or (not unlimited_requests and requests >= max_requests):
                     break
 
                 for page in range(0, pages_per_query):
-                    if len(rows) >= target_count or requests >= max_requests:
+                    if len(rows) >= target_count or (
+                        not unlimited_requests and requests >= max_requests
+                    ):
                         break
 
                     start = page * num_per_request
@@ -515,11 +518,12 @@ def collect_group(
                     time.sleep(request_sleep_s)
 
     logger.info(
-        "[%s] zebrano: %s / %s, zapytań: %s",
+        "[%s] zebrano: %s / %s, zapytań: %s%s",
         group_name,
         len(rows),
         target_count,
         requests,
+        " (bez limitu per grupa)" if unlimited_requests else "",
     )
     return rows[:target_count]
 
@@ -539,7 +543,12 @@ def main() -> None:
         default="Bialystok,Bydgoszcz,Gdansk,Gorzow Wielkopolski,Katowice,Kielce,Krakow,Lublin,Lodz,Olsztyn,Opole,Poznan,Rzeszow,Szczecin,Torun,Warszawa,Wroclaw,Zielona Gora",
         help="Lista miast rozdzielona przecinkami",
     )
-    parser.add_argument("--max-requests-per-group", type=int, default=250)
+    parser.add_argument(
+        "--max-requests-per-group",
+        type=int,
+        default=250,
+        help="Maksymalna liczba zapytan na grupe; 0 lub mniej = bez limitu.",
+    )
     parser.add_argument("--pages-per-query", type=int, default=4)
     parser.add_argument("--num-per-request", type=int, default=20)
     parser.add_argument("--sleep", type=float, default=0.25)

@@ -107,7 +107,7 @@ jobs:
   serpapi-sunday:
     if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180
     needs: [test-python]
     steps:
       - name: Checkout
@@ -128,7 +128,7 @@ jobs:
         env:
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
         run: |
-          python build_contacts_serpapi.py --firm-target 200 --agency-target 200 --ecommerce-target 200 --cities "Wroclaw,Zielona Gora,Poznan" --output "$HOME/Kontakty_serpapi.xlsx"
+          python build_contacts_serpapi.py --firm-target 200 --agency-target 200 --ecommerce-target 200 --max-requests-per-group 0 --cities "Wroclaw,Zielona Gora,Poznan" --output "$HOME/Kontakty_serpapi.xlsx"
 
   pipeline:
     if: |
