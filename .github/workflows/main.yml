@@ -1,8 +1,7 @@
-﻿name: CI + Pipeline
+name: CI + Pipeline
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,15 +10,21 @@ concurrency:
 on:
   push:
     branches: [main]
+    paths:
+      - "build_contacts_serpapi.py"
+      - "run_pipeline.ps1"
+      - "requirements*.txt"
+      - "tests/**"
+      - ".github/workflows/main.yml"
   pull_request:
+    paths:
+      - "build_contacts_serpapi.py"
+      - "run_pipeline.ps1"
+      - "requirements*.txt"
+      - "tests/**"
+      - ".github/workflows/main.yml"
   workflow_dispatch:
     inputs:
-      run_serpapi:
-        description: "Run SerpAPI build job in this workflow"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
       run_pipeline:
         description: "Run pipeline job in this workflow"
         required: false
@@ -70,10 +75,37 @@ jobs:
           DRY_RUN: "1"
         run: python -m pytest tests -v --tb=short
 
+  test-powershell:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Pester tests
+        shell: pwsh
+        env:
+          # Jawny root repozytorium dla testow (PSScriptRoot w Pester/pwsh bywa zawodny).
+          REPO_ROOT: ${{ github.workspace }}
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          # pwsh ma czesto Pester 5 z legacy Should (Should Be) wylaczonym — testy uzywaja skladni Pester 3/4.
+          Install-Module Pester -RequiredVersion 4.10.1 -Force -SkipPublisherCheck -Scope CurrentUser -AllowClobber
+          Remove-Module Pester -Force -ErrorAction SilentlyContinue
+          Import-Module Pester -RequiredVersion 4.10.1 -Force
+          if ((Get-Module Pester).Version.ToString() -ne "4.10.1") {
+            throw "Oczekiwano Pester 4.10.1, jest: $((Get-Module Pester).Version)"
+          }
+          Set-Location -LiteralPath $env:REPO_ROOT
+          $r1 = Invoke-Pester -Path ".\tests\powershell\RunPipeline.Tests.ps1" -PassThru
+          $r2 = Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1" -PassThru
+          $failed = [int]$r1.FailedCount + [int]$r2.FailedCount
+          if ($failed -gt 0) { exit $failed }
+
   serpapi-sunday:
-    if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_serpapi == 'true')
+    if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test-python]
@@ -100,16 +132,14 @@ jobs:
 
   pipeline:
     if: |
-      always() &&
+      github.ref == 'refs/heads/main' &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline == 'true') ||
-        (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
-      ) &&
-      needs.test-python.result == 'success' &&
-      (needs.serpapi-sunday.result == 'success' || needs.serpapi-sunday.result == 'skipped')
-    runs-on: ubuntu-latest
-    timeout-minutes: 420
-    needs: [test-python, serpapi-sunday]
+      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
+      )
+    runs-on: windows-latest
+    timeout-minutes: 45
+    needs: [test-python, test-powershell]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -121,124 +151,38 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Prepare input sample
+        shell: pwsh
         run: |
-          set -euo pipefail
-          kontakty_dir="${HOME}/Documents/kontakty"
-          docs_dir="${HOME}/Documents"
-          mkdir -p "${kontakty_dir}"
-          printf '%s\n' \
-            'company_name,email,phone,url,source_query' \
-            'Test Company,test@example.com,,https://example.com,test query' \
-            > "${kontakty_dir}/sample.csv"
-          # Minimalny PDF, aby pipeline nie wymagał lokalnego CV_PATH z maszyny deweloperskiej.
-          printf '%%PDF-1.4\n%%EOF\n' > "${docs_dir}/cv-ci.pdf"
+          $docsDir = Join-Path $env:USERPROFILE "Documents"
+          $kontaktyDir = Join-Path $docsDir "kontakty"
+          New-Item -ItemType Directory -Path $kontaktyDir -Force | Out-Null
+          @"
+          company_name,email,phone,url,source_query
+          Test Company,test@example.com,,https://example.com,test query
+          "@ | Out-File -FilePath (Join-Path $kontaktyDir "sample.csv") -Encoding utf8
 
       - name: Run pipeline
+        shell: pwsh
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-          CV_DOWNLOAD_URL: "https://drive.google.com/file/d/15V22fA-VOlprVRW4fYyYFv_daHbolgyt/view?usp=drive_link"
+          PIPELINE_PYTHON_EXE: python
         run: |
-          set -euo pipefail
-          docs_dir="${HOME}/Documents"
-          kontakty_dir="${docs_dir}/kontakty"
-          out_xlsx="${docs_dir}/Kontakty_serpapi.xlsx"
-          out_csv="${docs_dir}/Kontakty_cleaned.csv"
-          export CV_PATH="${docs_dir}/cv-ci.pdf"
-          mkdir -p "${kontakty_dir}"
-
-          skip_build="true"
-          dry_run="true"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ github.event.inputs.skip_build }}" = "false" ]; then skip_build="false"; fi
-            if [ "${{ github.event.inputs.dry_run }}" = "false" ]; then dry_run="false"; fi
-          fi
-
-          if [ "${skip_build}" = "false" ]; then
-            export SERPAPI_DAILY_LIMIT_ENABLED="1"
-            set +e
-            python build_contacts_serpapi.py \
-              --firm-target "1000" \
-              --agency-target "1000" \
-              --ecommerce-target "1000" \
-              --cities "Bialystok,Bydgoszcz,Gdansk,Gorzow Wielkopolski,Katowice,Kielce,Krakow,Lublin,Lodz,Olsztyn,Opole,Poznan,Rzeszow,Szczecin,Torun,Warszawa,Wroclaw,Zielona Gora" \
-              --max-requests-per-group "800" \
-              --pages-per-query "6" \
-              --num-per-request "20" \
-              --enrich-email \
-              --output "${out_xlsx}"
-            build_exit=$?
-            set -e
-            if [ "${build_exit}" -eq 2 ]; then
-              echo "[pipeline] SerpAPI pominiety (limit dzienny lub brak klucza/biblioteki) kod=2"
-            elif [ "${build_exit}" -ne 0 ]; then
-              echo "[pipeline] SerpAPI zwrocil blad (${build_exit}) — jesli brak pliku wyjsciowego, uzyje folderu kontakty."
-            fi
-          fi
-
-          if [ "${skip_build}" = "true" ]; then
-            echo "[pipeline] Probuję pobrać ostatni artifact contacts-latest z poprzednich runów..."
-            artifact_id="$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
-                --jq '.artifacts | map(select(.name=="contacts-latest" and (.expired|not))) | sort_by(.created_at) | last | .id // empty'
-            )"
-            if [ -n "${artifact_id}" ]; then
-              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${docs_dir}/contacts-latest.zip"
-              unzip -o "${docs_dir}/contacts-latest.zip" -d "${docs_dir}" >/dev/null
-              rm -f "${docs_dir}/contacts-latest.zip"
-              echo "[pipeline] Pobrano artifact contacts-latest (id=${artifact_id})."
-            else
-              echo "[pipeline] Brak artifactu contacts-latest do pobrania."
-            fi
-          fi
-
-          input_for_clean=""
-          if [ -f "${out_xlsx}" ]; then
-            input_for_clean="${out_xlsx}"
-          else
-            shopt -s nullglob
-            best_ts=0
-            for f in "${kontakty_dir}"/*.csv "${kontakty_dir}"/*.xlsx "${kontakty_dir}"/*.xls "${kontakty_dir}"/*.XLSX; do
-              [ -f "${f}" ] || continue
-              ts="$(stat -c %Y "${f}")"
-              if [ "${ts}" -ge "${best_ts}" ]; then best_ts="${ts}"; input_for_clean="${f}"; fi
-            done
-            shopt -u nullglob
-          fi
-
-          if [ -z "${input_for_clean}" ] || [ ! -f "${input_for_clean}" ]; then
-            echo "Brak pliku wejsciowego: nie znaleziono ${out_xlsx} ani zadnego .xlsx/.xls/.csv w katalogu: ${kontakty_dir}"
-            exit 1
-          fi
-
-          echo "[pipeline] Wejscie: ${input_for_clean}"
-
-          dry_flag=()
-          if [ "${dry_run}" = "true" ]; then dry_flag=(--dry-run); fi
-
-          python clean_validate_send_pipeline.py \
-            --input "${input_for_clean}" \
-            --output-csv "${out_csv}" \
-            --extra-contacts-dir "${kontakty_dir}" \
-            "${dry_flag[@]}"
-
-      - name: Upload contacts artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: contacts-latest
-          path: |
-            ~/Documents/Kontakty_serpapi.xlsx
-            ~/Documents/kontakty/*.csv
-            ~/Documents/kontakty/*.xlsx
-            ~/Documents/kontakty/*.xls
-          if-no-files-found: ignore
-          overwrite: true
+          $skipBuild = "-SkipBuild"
+          $dryRun = "-DryRun"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            if ("${{ github.event.inputs.skip_build }}" -eq "false") { $skipBuild = "" }
+            if ("${{ github.event.inputs.dry_run }}" -eq "false") { $dryRun = "" }
+          }
+          $args = @()
+          if ($skipBuild) { $args += $skipBuild }
+          if ($dryRun) { $args += $dryRun }
+          ./run_pipeline.ps1 @args
