@@ -53,6 +53,17 @@ $logPath = Join-Path $logsDir "pipeline_$stamp.log"
 
 "[$(Get-Date -Format s)] Start pipeline wersja=$pipelineVersion (SkipBuild=$SkipBuild DryRun=$DryRun)" | Out-File -FilePath $logPath -Encoding utf8
 
+# Na runnerze CI często nie ma sekretu SMTP; automatycznie przełącz na DryRun, zamiast kończyć błędem.
+if (-not $DryRun) {
+    $gmailRaw = if ($env:GMAIL_APP_PASSWORD) { $env:GMAIL_APP_PASSWORD } else { "" }
+    $gmailNorm = ($gmailRaw -replace '\s+', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($gmailNorm) -or $gmailNorm.Length -ne 16) {
+        $DryRun = $true
+        "[$(Get-Date -Format s)] Brak poprawnego GMAIL_APP_PASSWORD (16 znakow) - wymuszam DryRun." | Out-File -FilePath $logPath -Append -Encoding utf8
+        Write-Host "[pipeline] Brak poprawnego GMAIL_APP_PASSWORD - wymuszam DryRun." -ForegroundColor Yellow
+    }
+}
+
 $buildExit = 0
 # Etap 1: budowanie kontaktów (może być pominięte przez -SkipBuild).
 if (-not $SkipBuild) {

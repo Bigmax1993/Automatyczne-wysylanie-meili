@@ -217,6 +217,39 @@ def test_collect_group_serpapi_error_then_success_still_collects(monkeypatch) ->
     assert any("po-bledzie.example.com" in r.get("Strona WWW", "") for r in rows)
 
 
+def test_collect_group_unlimited_requests_when_max_requests_zero(monkeypatch) -> None:
+    """max_requests <= 0 oznacza brak limitu requestow na grupe."""
+    monkeypatch.setattr(serp.time, "sleep", lambda _x: None)
+    calls = {"n": 0}
+
+    def _fake_query(_api_key: str, _query: str, _start: int, num: int) -> dict:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"organic_results": []}
+        return {
+            "organic_results": [
+                {"title": "Unlimited Firma", "link": "https://unlimited.example.com"},
+            ]
+        }
+
+    monkeypatch.setattr(serp, "_query_serpapi", _fake_query)
+    rows = serp.collect_group(
+        api_key="x",
+        group_name="unlimited",
+        keywords=["Data analytics consulting"],
+        cities=["Wroclaw"],
+        target_count=1,
+        max_requests=0,
+        request_sleep_s=0.0,
+        pages_per_query=2,
+        num_per_request=10,
+    )
+
+    assert calls["n"] >= 2
+    assert len(rows) == 1
+    assert rows[0]["Strona WWW"] == "https://unlimited.example.com"
+
+
 def test_find_company_website_uses_non_portal_result(monkeypatch) -> None:
     def _fake_query(_api_key: str, _query: str, start: int, num: int) -> dict:
         assert start == 0
