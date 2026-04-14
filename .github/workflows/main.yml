@@ -13,6 +13,12 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      run_serpapi:
+        description: "Run SerpAPI build job in this workflow"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
       run_pipeline:
         description: "Run pipeline job in this workflow"
         required: false
@@ -64,7 +70,9 @@ jobs:
         run: python -m pytest tests -v --tb=short
 
   serpapi-sunday:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0'
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * 0') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_serpapi == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test-python]
