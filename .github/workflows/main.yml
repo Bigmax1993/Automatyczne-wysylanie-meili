@@ -100,11 +100,16 @@ jobs:
 
   pipeline:
     if: |
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline == 'true') ||
-      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_pipeline == 'true') ||
+        (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1')
+      ) &&
+      needs.test-python.result == 'success' &&
+      (needs.serpapi-sunday.result == 'success' || needs.serpapi-sunday.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 420
-    needs: [test-python]
+    needs: [test-python, serpapi-sunday]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
