@@ -131,6 +131,7 @@ jobs:
 
   pipeline:
     if: |
+      always() &&
       github.ref == 'refs/heads/main' &&
       (
         github.event_name == 'workflow_dispatch' ||
