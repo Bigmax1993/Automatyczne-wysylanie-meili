@@ -124,6 +124,24 @@ python -m pytest tests -v --tb=short
 Remove-Item Env:PYTEST_DISABLE_PLUGIN_AUTOLOAD -ErrorAction SilentlyContinue
 ```
 
+Szybkie komendy (najczęściej używane):
+
+```powershell
+# "Jednostkowe" (bez e2e i integracyjnych)
+python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -v --tb=short
+
+# Integracyjne
+python -m pytest tests/integration -v --tb=short
+
+# Regresyjne
+python -m pytest tests/regression -v --tb=short
+
+# End-to-end
+python -m pytest tests/e2e -v --tb=short
+```
+
+Uwaga (Linux): testy GUI (`tests/test_pipeline_launcher_gui.py`) wymagają modułu `tkinter` (`python3-tk`).
+
 **PowerShell (Pester 3.4+ lub 5)** — składnia zgodna ze starszym Pesterem z `Program Files`:
 
 ```powershell
