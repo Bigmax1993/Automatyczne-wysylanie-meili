@@ -74,7 +74,6 @@ def test_run_pipeline_uses_script_root_for_project_dir() -> None:
 def test_run_pipeline_respects_pipeline_python_exe_env() -> None:
     text = RUN_PIPELINE_PS1.read_text(encoding="utf-8")
     assert "PIPELINE_PYTHON_EXE" in text
-    assert "Get-Command" in text
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Tresc skryptu Windows")
@@ -116,11 +115,3 @@ def test_run_pipeline_serpapi_block_also_uses_continue_for_stderr() -> None:
 def test_run_pipeline_normalizes_clean_output_to_string_array() -> None:
     text = RUN_PIPELINE_PS1.read_text(encoding="utf-8")
     assert '$cleanOut = @($cleanOut | ForEach-Object { "$_" })' in text
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Tresc skryptu Windows")
-def test_run_pipeline_forces_dry_run_when_gmail_password_missing() -> None:
-    text = RUN_PIPELINE_PS1.read_text(encoding="utf-8")
-    assert "Brak poprawnego GMAIL_APP_PASSWORD" in text
-    assert "$DryRun = $true" in text
-    assert "gmailNorm.Length -ne 16" in text

@@ -8,16 +8,11 @@ $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $localEnvPath = Join-Path $projectDir "local_env.ps1"
-$pythonExe = if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
-    $env:PIPELINE_PYTHON_EXE.Trim()
-} else {
-    "python"
-}
-try {
-    $pythonExe = (Get-Command -Name $pythonExe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-} catch {
-    Write-Host "Nie znaleziono interpretera Python: ustaw PIPELINE_PYTHON_EXE albo dodaj python.exe do PATH." -ForegroundColor Red
-    exit 1
+$pythonExe = "C:\Users\svinc\AppData\Local\Programs\Python\Python313\python.exe"
+if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
+    $pythonExe = $env:PIPELINE_PYTHON_EXE.Trim()
+} elseif (-not (Test-Path $pythonExe)) {
+    $pythonExe = "python"
 }
 
 if (Test-Path $localEnvPath) {
