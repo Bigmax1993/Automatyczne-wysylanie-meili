@@ -122,14 +122,14 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 ### 7.1. Zalecane: `run_with_env.ps1`
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 .\run_with_env.ps1 -SkipBuild -DryRun
 ```
 
 ### 7.2. GUI
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 python pipeline_launcher_gui.py
 ```
 
@@ -138,7 +138,7 @@ Wywołuje ten sam `run_with_env.ps1` co konsola; wymaga `local_env.ps1`.
 ### 7.3. Pozyskanie leadów (SerpAPI)
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 python build_contacts_serpapi.py --firm-target 1000 --agency-target 1000 --ecommerce-target 1000 --cities "Wroclaw,Zielona Gora,Poznan" --pages-per-query 6 --num-per-request 20 --max-requests-per-group 800 --enrich-email --output "$env:USERPROFILE\Documents\Kontakty_serpapi.xlsx"
 ```
 
@@ -200,7 +200,7 @@ Start-ScheduledTask -TaskName "PipelineMailing1900"
 ### pytest (Python)
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
 python -m pytest tests -v --tb=short
 Remove-Item Env:PYTEST_DISABLE_PLUGIN_AUTOLOAD -ErrorAction SilentlyContinue
@@ -223,6 +223,23 @@ Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1"
 ### Pełna pętla (pytest + oba pliki Pester)
 
 Patrz sekcja **Testy** w głównym [`README.md`](../README.md).
+
+### GitHub Actions (workflow `CI + Pipeline`)
+
+- `push` / `pull_request`: uruchamiają testy (`test-python`, `test-powershell`).
+- `workflow_dispatch`: pozwala uruchomić testy oraz opcjonalnie `run_serpapi` i/lub `run_pipeline`.
+- Harmonogram:
+  - niedziela `0 19 * * 0` UTC: `serpapi-sunday`,
+  - poniedziałek `0 2 * * 1` UTC: `pipeline`.
+- Ustawione limity czasu:
+  - `test-python`: 30 min,
+  - `test-powershell`: 30 min,
+  - `serpapi-sunday`: 45 min,
+  - `pipeline`: 180 min.
+- Artefakty po jobie `pipeline`:
+  - `pipeline-json-backup-<run_id>-<run_attempt>`,
+  - `pipeline-logs-<run_id>-<run_attempt>`,
+  - retencja: 30 dni.
 
 ## 11. Ograniczenia i dobre praktyki
 

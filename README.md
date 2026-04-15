@@ -20,7 +20,7 @@ python -m pip install -r requirements.txt
 2. Z katalogu projektu:
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 .\run_with_env.ps1 -CheckOnly          # test OpenAI
 .\run_with_env.ps1                     # pełny przebieg (SerpAPI + clean + wysyłka)
 .\run_with_env.ps1 -SkipBuild          # bez SerpAPI — od clean/validate/send
@@ -43,7 +43,7 @@ Jeśli w `local_env.ps1` ustawisz złą **niepustą** wartość, może ona nadal
 Proste okno **Tkinter** do uruchamiania `run_with_env.ps1` z przełącznikami i podglądem logu:
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 python pipeline_launcher_gui.py
 ```
 
@@ -118,7 +118,7 @@ Szukane są m.in. wzorce `CV*.pdf` w `Documents` oraz w podfolderach **`CV`**, `
 **Python (pytest)** — cały katalog `tests` (w tym e2e, integracja, testy subprocess dla `contact_mailer`, parser PS1):
 
 ```powershell
-cd "C:\Users\svinc\Automatyczna wysylka meili"
+cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
 python -m pytest tests -v --tb=short
 Remove-Item Env:PYTEST_DISABLE_PLUGIN_AUTOLOAD -ErrorAction SilentlyContinue
@@ -134,7 +134,7 @@ Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1"
 **Wszystko naraz (pytest + Pester):**
 
 ```powershell
-$proj = "C:\Users\svinc\Automatyczna wysylka meili"
+$proj = "$env:USERPROFILE\Automatyczne-wysylanie-meili"
 Set-Location -LiteralPath $proj
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
 python -m pytest tests -v --tb=short
@@ -152,7 +152,7 @@ Jeden plik workflow: [`.github/workflows/main.yml`](.github/workflows/main.yml).
 | Zdarzenie | Co się dzieje |
 |-----------|----------------|
 | `push` / `pull_request` | Joby **test-python** (Ubuntu, pytest) i **test-powershell** (Windows, Pester). Pipeline **nie** startuje automatycznie. |
-| `workflow_dispatch` | Te same testy; opcjonalnie job **pipeline**, jeśli w formularzu ustawisz *Run pipeline job* na `true`. |
+| `workflow_dispatch` | Te same testy; możesz niezależnie włączyć job **serpapi-sunday** (`run_serpapi=true`) i **pipeline** (`run_pipeline=true`). |
 | Harmonogram | Niedziela `0 19 * * 0` UTC — build SerpAPI (`serpapi-sunday`). Poniedziałek `0 2 * * 1` UTC — **pipeline** na runnerze Windows (domyślnie `-SkipBuild -DryRun`, bez realnej wysyłki SMTP). |
 
 Wymagane sekrety w repo (`Settings` → `Secrets and variables` → `Actions`):
@@ -162,7 +162,15 @@ Wymagane sekrety w repo (`Settings` → `Secrets and variables` → `Actions`):
 - `GMAIL_APP_PASSWORD`
 - `GMAIL_SENDER_EMAIL`
 
-Ręczne uruchomienie pipeline z Actions: *Actions* → *CI + Pipeline* → *Run workflow* → ustaw *Run pipeline job* na `true`; *dry_run* domyślnie `true` (bez SMTP), chyba że ustawisz inaczej.
+Ręczne uruchomienie pipeline z Actions: *Actions* → *CI + Pipeline* → *Run workflow* → ustaw `run_pipeline=true`; `dry_run` domyślnie jest `true` (bez SMTP), chyba że ustawisz inaczej.
+
+Limity czasowe i artefakty w CI:
+
+- `test-python`: `timeout-minutes: 30`
+- `test-powershell`: `timeout-minutes: 30`
+- `serpapi-sunday`: `timeout-minutes: 45`
+- `pipeline`: `timeout-minutes: 180`
+- Artefakty backupów/logów: retencja `30` dni (`pipeline-json-backup-*`, `pipeline-logs-*`)
 
 ## Dokumentacja dodatkowa
 
@@ -179,7 +187,7 @@ Nazwa repozytorium na GitHubie (bez spacji, znaki łacińskie): **`Automatyczne-
    ```
 2. W katalogu projektu (ten folder z `README.md`). Jeśli **nie** masz jeszcze lokalnego `.git`, uruchom `git init`, `git add -A`, `git commit -m "..."` (sprawdź `git status` — nie powinno być `local_env.ps1` ani `.env`). Następnie:
    ```powershell
-   cd "C:\Users\svinc\Automatyczna wysylka meili"
+   cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
    gh repo create Automatyczne-wysylanie-meili --public --source=. --remote=origin --push --description "Automatyczne wysyłanie meili: SerpAPI, OpenAI, Gmail SMTP, PowerShell"
    ```
    Jeśli repozytorium **już istnieje** na koncie (puste), zamiast `gh repo create` użyj:
