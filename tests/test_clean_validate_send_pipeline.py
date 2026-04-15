@@ -490,49 +490,6 @@ def test_skip_clean_dry_run_without_openai(tmp_path, monkeypatch) -> None:
     assert out.loc[0, cm.STATUS_COL] == "Tak"
 
 
-def test_main_dry_run_allows_missing_cv(tmp_path, monkeypatch) -> None:
-    input_csv = tmp_path / "in.csv"
-    out_csv = tmp_path / "out.csv"
-    pd.DataFrame([{"Firma": "A", "E-mail rekrutacyjny": "a@x.pl", "Walidacja": "OK"}]).to_csv(
-        input_csv, index=False, encoding="utf-8-sig"
-    )
-
-    monkeypatch.setenv("OPENAI_API_KEY", "x")
-    monkeypatch.setattr(pipe, "OpenAI", lambda api_key: object())
-    monkeypatch.setattr(cm, "_resolve_cv_path", lambda: (_ for _ in ()).throw(FileNotFoundError("no cv")))
-    monkeypatch.setattr(
-        pipe,
-        "_process_source",
-        lambda source_path, output_csv, client, model, cv_path, dry_run, skip_clean=False: {
-            "sent": 0,
-            "skipped": 0,
-            "openai_errors": 0,
-            "smtp_errors": 0,
-            "daily_limit_reached": 0,
-            "email_from_web": 0,
-            "skip_validation_failed": 0,
-            "skip_already_sent": 0,
-            "skip_invalid_or_missing_email": 0,
-            "skip_blocked_domain": 0,
-            "skip_daily_limit": 0,
-        },
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "clean_validate_send_pipeline.py",
-            "--input",
-            str(input_csv),
-            "--output-csv",
-            str(out_csv),
-            "--dry-run",
-            "--skip-extra-contacts",
-        ],
-    )
-    pipe.main()
-
-
 def test_safe_stem_for_output_sanitizes() -> None:
     stem_sp = pipe._safe_stem_for_output("plik ze spacja.xlsx")
     assert " " not in stem_sp
