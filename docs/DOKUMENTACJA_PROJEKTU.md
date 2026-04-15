@@ -206,6 +206,23 @@ python -m pytest tests -v --tb=short
 Remove-Item Env:PYTEST_DISABLE_PLUGIN_AUTOLOAD -ErrorAction SilentlyContinue
 ```
 
+- Szybkie zestawy:
+
+```powershell
+# "Jednostkowe" (bez e2e i integracyjnych)
+python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -v --tb=short
+
+# Integracyjne
+python -m pytest tests/integration -v --tb=short
+
+# Regresyjne
+python -m pytest tests/regression -v --tb=short
+
+# End-to-end
+python -m pytest tests/e2e -v --tb=short
+```
+
+- Na Linux testy GUI (`tests/test_pipeline_launcher_gui.py`) wymagają modułu `tkinter` (`python3-tk`). Bez niego uruchamiaj pytest z pominięciem testów GUI.
 - **`testpaths`** w `pytest.ini`: `tests`.
 - Markery: `integration`, `regression`, `e2e`.
 - **`tests/test_contact_mailer_env_subprocess.py`** — osobny proces: `password` / `SENDER_EMAIL` przy imporcie modułu.
@@ -223,6 +240,19 @@ Invoke-Pester -Path ".\tests\powershell\RunWithEnv.Tests.ps1"
 ### Pełna pętla (pytest + oba pliki Pester)
 
 Patrz sekcja **Testy** w głównym [`README.md`](../README.md).
+
+### GitHub Actions (CI + Pipeline)
+
+Aktualny workflow: [`.github/workflows/main.yml`](../.github/workflows/main.yml).
+
+| Zdarzenie | Co się dzieje |
+|-----------|----------------|
+| `push` (tylko `main`) | `test-python` + `test-powershell`; job `pipeline` nie uruchamia się automatycznie. |
+| `pull_request` | `test-python` + `test-powershell`; job `pipeline` nie uruchamia się automatycznie. |
+| `workflow_dispatch` | testy + opcjonalny job `pipeline` po ustawieniu `run_pipeline=true`. |
+| `schedule` | Niedziela `0 19 * * 0` UTC: `serpapi-sunday`; poniedziałek `0 2 * * 1` UTC: `pipeline` (domyślnie `-SkipBuild -DryRun`). |
+
+Workflow nie definiuje `timeout-minutes` dla jobów.
 
 ## 11. Ograniczenia i dobre praktyki
 
