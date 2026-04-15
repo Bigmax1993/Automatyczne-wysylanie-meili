@@ -470,8 +470,7 @@ def _send_from_cleaned_csv(
             msg["From"] = cm.SENDER_EMAIL
             msg["To"] = email
             msg.set_content(mail_text)
-            if cv_path:
-                cm._attach_cv(msg, cv_path)
+            cm._attach_cv(msg, cv_path)
 
             try:
                 if dry_run:
@@ -653,17 +652,6 @@ def main() -> None:
         )
 
     default_out = _default_output_csv_path()
-    cv_path = ""
-    if args.dry_run:
-        try:
-            cv_path = cm._resolve_cv_path()
-        except FileNotFoundError:
-            logger.warning(
-                "Nie znaleziono CV dla dry-run; kontynuuję bez załącznika (ustaw CV_PATH, aby testować z CV)."
-            )
-    else:
-        cv_path = cm._resolve_cv_path()
-
     if args.skip_clean:
         input_path = os.path.abspath((args.input or "").strip())
         if not os.path.isfile(input_path):
@@ -671,6 +659,7 @@ def main() -> None:
         output_csv = (
             os.path.abspath(args.output_csv) if args.output_csv is not None else input_path
         )
+        cv_path = cm._resolve_cv_path()
         stats = _process_source(
             source_path=input_path,
             output_csv=output_csv,
@@ -688,6 +677,7 @@ def main() -> None:
 
         input_path = _resolve_input_path(args.input)
         output_csv = args.output_csv if args.output_csv is not None else default_out
+        cv_path = cm._resolve_cv_path()
 
         stats = _process_source(
             source_path=input_path,

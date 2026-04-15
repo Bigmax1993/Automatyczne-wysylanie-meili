@@ -12,17 +12,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Katalog projektu i interpreter Pythona (PIPELINE_PYTHON_EXE lub pierwszy python z PATH).
+# Katalog projektu i interpreter Pythona (domyślny lub z env).
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pythonExe = if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
-    $env:PIPELINE_PYTHON_EXE.Trim()
-} else {
-    "python"
-}
-try {
-    $pythonExe = (Get-Command -Name $pythonExe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-} catch {
-    throw "Nie znaleziono interpretera Python: ustaw PIPELINE_PYTHON_EXE albo dodaj python.exe do PATH."
+$pythonExe = "C:\Users\svinc\AppData\Local\Programs\Python\Python313\python.exe"
+if ($env:PIPELINE_PYTHON_EXE -and $env:PIPELINE_PYTHON_EXE.Trim()) {
+    $pythonExe = $env:PIPELINE_PYTHON_EXE.Trim()
 }
 # Standardowe ścieżki danych wej./wyj.
 $docsDir = Join-Path $env:USERPROFILE "Documents"
@@ -43,6 +37,10 @@ if (Test-Path $versionPath) {
     $pipelineVersion = (Get-Content -LiteralPath $versionPath -Raw).Trim()
 }
 
+if (-not (Test-Path $pythonExe)) {
+    throw "Nie znaleziono interpretera Python: $pythonExe"
+}
+
 $logsDir = Join-Path $docsDir "pipeline_logs"
 if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir | Out-Null
@@ -52,17 +50,6 @@ $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $logPath = Join-Path $logsDir "pipeline_$stamp.log"
 
 "[$(Get-Date -Format s)] Start pipeline wersja=$pipelineVersion (SkipBuild=$SkipBuild DryRun=$DryRun)" | Out-File -FilePath $logPath -Encoding utf8
-
-# Na runnerze CI często nie ma sekretu SMTP; automatycznie przełącz na DryRun, zamiast kończyć błędem.
-if (-not $DryRun) {
-    $gmailRaw = if ($env:GMAIL_APP_PASSWORD) { $env:GMAIL_APP_PASSWORD } else { "" }
-    $gmailNorm = ($gmailRaw -replace '\s+', '').Trim()
-    if ([string]::IsNullOrWhiteSpace($gmailNorm) -or $gmailNorm.Length -ne 16) {
-        $DryRun = $true
-        "[$(Get-Date -Format s)] Brak poprawnego GMAIL_APP_PASSWORD (16 znakow) - wymuszam DryRun." | Out-File -FilePath $logPath -Append -Encoding utf8
-        Write-Host "[pipeline] Brak poprawnego GMAIL_APP_PASSWORD - wymuszam DryRun." -ForegroundColor Yellow
-    }
-}
 
 $buildExit = 0
 # Etap 1: budowanie kontaktów (może być pominięte przez -SkipBuild).

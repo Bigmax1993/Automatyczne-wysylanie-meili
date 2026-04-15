@@ -63,7 +63,7 @@ Pełna lista i opisy: **`env.example`**.
 | `CV_PATH` | Opcjonalnie: PDF, ścieżka bez `.pdf` lub folder z PDF |
 | `OPENAI_MODEL` | Domyślnie `gpt-4o-mini` |
 | `DRY_RUN` | `1` / `true` — bez SMTP w warstwie Python |
-| `MAX_EMAILS_PER_DAY` | Limit dzienny (domyślnie `200`) |
+| `MAX_EMAILS_PER_DAY` | Limit dzienny (domyślnie `40`) |
 | `EXTRA_CONTACTS_DIR` | Folder z dodatkowymi `.xlsx`/`.csv` (domyślnie `Documents\kontakty`) |
 | `CAMPAIGN_LOG_ENABLED`, `CAMPAIGN_LOG_PATH` | Log kampanii CSV |
 | `PIPELINE_LOG_LEVEL`, `PIPELINE_LOG_TO_FILE`, `PIPELINE_LOG_FILE` | Logowanie Python (`logging`) |
