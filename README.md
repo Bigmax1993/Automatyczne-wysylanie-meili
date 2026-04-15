@@ -151,9 +151,12 @@ Jeden plik workflow: [`.github/workflows/main.yml`](.github/workflows/main.yml).
 
 | Zdarzenie | Co się dzieje |
 |-----------|----------------|
-| `push` / `pull_request` | Joby **test-python** (Ubuntu, pytest) i **test-powershell** (Windows, Pester). Pipeline **nie** startuje automatycznie. |
+| `push` (tylko gałąź `main`) | Joby **test-python** (Ubuntu, pytest) i **test-powershell** (Windows, Pester). Pipeline **nie** startuje automatycznie. |
+| `pull_request` | Joby **test-python** (Ubuntu, pytest) i **test-powershell** (Windows, Pester) dla PR. Pipeline **nie** startuje automatycznie. |
 | `workflow_dispatch` | Te same testy; opcjonalnie job **pipeline**, jeśli w formularzu ustawisz *Run pipeline job* na `true`. |
 | Harmonogram | Niedziela `0 19 * * 0` UTC — build SerpAPI (`serpapi-sunday`). Poniedziałek `0 2 * * 1` UTC — **pipeline** na runnerze Windows (domyślnie `-SkipBuild -DryRun`, bez realnej wysyłki SMTP). |
+
+Workflow nie definiuje `timeout-minutes` (brak sztucznych limitów czasu dla jobów).
 
 Wymagane sekrety w repo (`Settings` → `Secrets and variables` → `Actions`):
 
