@@ -250,6 +250,48 @@ def test_collect_group_unlimited_requests_when_max_requests_zero(monkeypatch) ->
     assert rows[0]["Strona WWW"] == "https://unlimited.example.com"
 
 
+def test_collect_group_respects_shared_total_budget_across_groups(monkeypatch) -> None:
+    monkeypatch.setattr(serp.time, "sleep", lambda _x: None)
+    calls = {"n": 0}
+
+    def _fake_query(_api_key: str, _query: str, _start: int, num: int) -> dict:
+        calls["n"] += 1
+        return {"organic_results": [{"title": f"Firma {calls['n']}", "link": f"https://{calls['n']}.example.com"}]}
+
+    monkeypatch.setattr(serp, "_query_serpapi", _fake_query)
+    request_budget = {"used": 0, "max": 2, "unlimited": False}
+
+    rows_1 = serp.collect_group(
+        api_key="x",
+        group_name="g1",
+        keywords=["Data analytics consulting"],
+        cities=["Wroclaw"],
+        target_count=10,
+        max_requests=10,
+        request_sleep_s=0.0,
+        pages_per_query=2,
+        num_per_request=10,
+        request_budget=request_budget,
+    )
+    rows_2 = serp.collect_group(
+        api_key="x",
+        group_name="g2",
+        keywords=["Data analytics consulting"],
+        cities=["Wroclaw"],
+        target_count=10,
+        max_requests=10,
+        request_sleep_s=0.0,
+        pages_per_query=2,
+        num_per_request=10,
+        request_budget=request_budget,
+    )
+
+    assert request_budget["used"] == 2
+    assert calls["n"] == 2
+    assert len(rows_1) >= 1
+    assert rows_2 == []
+
+
 def test_find_company_website_uses_non_portal_result(monkeypatch) -> None:
     def _fake_query(_api_key: str, _query: str, start: int, num: int) -> dict:
         assert start == 0

@@ -13,7 +13,7 @@ import re
 import sys
 import time
 from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -454,32 +454,58 @@ def collect_group(
     request_sleep_s: float,
     pages_per_query: int,
     num_per_request: int,
+    request_budget: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
     seen = set()
     requests = 0
     city_scope = list(cities)
     unlimited_requests = max_requests <= 0
+    budget_unlimited = bool(request_budget and request_budget.get("unlimited"))
 
     for keyword in keywords:
         for city in city_scope:
-            if len(rows) >= target_count or (not unlimited_requests and requests >= max_requests):
+            if (
+                len(rows) >= target_count
+                or (not unlimited_requests and requests >= max_requests)
+                or (
+                    request_budget is not None
+                    and not budget_unlimited
+                    and int(request_budget.get("used", 0)) >= int(request_budget.get("max", 0))
+                )
+            ):
                 break
 
             query_variants = [f"{keyword} {city} {suffix}".strip() for suffix in QUERY_SUFFIXES]
             for query in query_variants:
-                if len(rows) >= target_count or (not unlimited_requests and requests >= max_requests):
+                if (
+                    len(rows) >= target_count
+                    or (not unlimited_requests and requests >= max_requests)
+                    or (
+                        request_budget is not None
+                        and not budget_unlimited
+                        and int(request_budget.get("used", 0)) >= int(request_budget.get("max", 0))
+                    )
+                ):
                     break
 
                 for page in range(0, pages_per_query):
-                    if len(rows) >= target_count or (
-                        not unlimited_requests and requests >= max_requests
+                    if (
+                        len(rows) >= target_count
+                        or (not unlimited_requests and requests >= max_requests)
+                        or (
+                            request_budget is not None
+                            and not budget_unlimited
+                            and int(request_budget.get("used", 0)) >= int(request_budget.get("max", 0))
+                        )
                     ):
                         break
 
                     start = page * num_per_request
                     data = _query_serpapi(api_key, query, start, num=num_per_request)
                     requests += 1
+                    if request_budget is not None:
+                        request_budget["used"] = int(request_budget.get("used", 0)) + 1
                     if data.get("error"):
                         logger.warning(
                             "[%s] SerpAPI error for '%s': %s",
@@ -525,6 +551,14 @@ def collect_group(
         requests,
         " (bez limitu per grupa)" if unlimited_requests else "",
     )
+    if request_budget is not None:
+        logger.info(
+            "[%s] globalny limit zapytan (sumarycznie): %s/%s%s",
+            group_name,
+            int(request_budget.get("used", 0)),
+            int(request_budget.get("max", 0)),
+            " (bez limitu globalnego)" if bool(request_budget.get("unlimited")) else "",
+        )
     return rows[:target_count]
 
 
@@ -548,6 +582,12 @@ def main() -> None:
         type=int,
         default=250,
         help="Maksymalna liczba zapytan na grupe; 0 lub mniej = bez limitu.",
+    )
+    parser.add_argument(
+        "--max-requests-total",
+        type=int,
+        default=200,
+        help="Maksymalna liczba zapytan lacznie dla wszystkich grup; 0 lub mniej = bez limitu.",
     )
     parser.add_argument("--pages-per-query", type=int, default=4)
     parser.add_argument("--num-per-request", type=int, default=20)
@@ -626,6 +666,11 @@ def main() -> None:
             serp_disabled,
         )
     else:
+        request_budget: Dict[str, Any] = {
+            "used": 0,
+            "max": args.max_requests_total,
+            "unlimited": args.max_requests_total <= 0,
+        }
         firm_rows = collect_group(
             api_key=api_key,
             group_name="firmy",
@@ -636,6 +681,7 @@ def main() -> None:
             request_sleep_s=args.sleep,
             pages_per_query=args.pages_per_query,
             num_per_request=args.num_per_request,
+            request_budget=request_budget,
         )
         agency_rows = collect_group(
             api_key=api_key,
@@ -647,6 +693,7 @@ def main() -> None:
             request_sleep_s=args.sleep,
             pages_per_query=args.pages_per_query,
             num_per_request=args.num_per_request,
+            request_budget=request_budget,
         )
         ecommerce_rows = collect_group(
             api_key=api_key,
@@ -658,6 +705,7 @@ def main() -> None:
             request_sleep_s=args.sleep,
             pages_per_query=args.pages_per_query,
             num_per_request=args.num_per_request,
+            request_budget=request_budget,
         )
         for row in ecommerce_rows:
             row["Branża"] = "Sklep internetowy / e-commerce"
