@@ -1,52 +1,16 @@
-name: CI + Pipeline
+# Poniedzialkowy pipeline — osobny plik z jednym cronem (UTC jak wczesniej w main.yml).
+name: Scheduled Pipeline (Monday)
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: scheduled-pipeline-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "build_contacts_serpapi.py"
-      - "run_pipeline.ps1"
-      - "requirements*.txt"
-      - "tests/**"
-      - ".github/workflows/main.yml"
-      - ".github/workflows/schedule-serpapi-sunday.yml"
-      - ".github/workflows/schedule-pipeline-monday.yml"
-  pull_request:
-    paths:
-      - "build_contacts_serpapi.py"
-      - "run_pipeline.ps1"
-      - "requirements*.txt"
-      - "tests/**"
-      - ".github/workflows/main.yml"
-      - ".github/workflows/schedule-serpapi-sunday.yml"
-      - ".github/workflows/schedule-pipeline-monday.yml"
-  workflow_dispatch:
-    inputs:
-      run_pipeline:
-        description: "Legacy switch (pipeline now runs on every manual run)"
-        required: false
-        default: "true"
-        type: choice
-        options: ["false", "true"]
-      skip_build:
-        description: "Skip SerpAPI build stage"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
-      dry_run:
-        description: "Run pipeline without SMTP send"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
+  schedule:
+    - cron: "0 2 * * 1"
 
 jobs:
   test-python:
@@ -84,13 +48,11 @@ jobs:
       - name: Run Pester tests
         shell: pwsh
         env:
-          # Jawny root repozytorium dla testow (PSScriptRoot w Pester/pwsh bywa zawodny).
           REPO_ROOT: ${{ github.workspace }}
         run: |
           $ProgressPreference = "SilentlyContinue"
           Set-StrictMode -Version Latest
           $ErrorActionPreference = "Stop"
-          # pwsh ma czesto Pester 5 z legacy Should (Should Be) wylaczonym — testy uzywaja skladni Pester 3/4.
           Install-Module Pester -RequiredVersion 4.10.1 -Force -SkipPublisherCheck -Scope CurrentUser -AllowClobber
           Remove-Module Pester -Force -ErrorAction SilentlyContinue
           Import-Module Pester -RequiredVersion 4.10.1 -Force
@@ -103,45 +65,15 @@ jobs:
           $failed = [int]$r1.FailedCount + [int]$r2.FailedCount
           if ($failed -gt 0) { exit $failed }
 
-  serpapi-sunday:
-    # SerpAPI w niedziele: workflow schedule-serpapi-sunday.yml (jeden cron, strefa Europe/Warsaw).
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.skip_build == 'false'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: [test-python]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run SerpAPI build
-        env:
-          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-        run: |
-          python build_contacts_serpapi.py --firm-target 200 --agency-target 200 --ecommerce-target 200 --max-requests-per-group 0 --max-requests-total 200 --cities "Wroclaw,Zielona Gora,Poznan" --output "$HOME/Kontakty_serpapi.xlsx"
-
   pipeline:
-    # Zaplanowany pipeline w poniedzialki: schedule-pipeline-monday.yml.
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&
-      github.event_name == 'workflow_dispatch' &&
       needs.test-python.result == 'success' &&
-      needs.test-powershell.result == 'success' &&
-      (needs.serpapi-sunday.result == 'success' || needs.serpapi-sunday.result == 'skipped')
+      needs.test-powershell.result == 'success'
     runs-on: windows-latest
     timeout-minutes: 180
-    needs: [test-python, test-powershell, serpapi-sunday]
+    needs: [test-python, test-powershell]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -180,10 +112,6 @@ jobs:
         run: |
           $skipBuild = "-SkipBuild"
           $dryRun = "-DryRun"
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ github.event.inputs.skip_build }}" -eq "false") { $skipBuild = "" }
-            if ("${{ github.event.inputs.dry_run }}" -eq "false") { $dryRun = "" }
-          }
           $args = @()
           if ($skipBuild) { $args += $skipBuild }
           if ($dryRun) { $args += $dryRun }

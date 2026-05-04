@@ -1,0 +1,67 @@
+# Osobny workflow z jednym harmonogramem — unika bledow przy wielu cronach w jednym pliku
+# (porownania github.event.schedule) i gwarantuje uruchomienie SerpAPI w niedziele.
+name: Scheduled SerpAPI (Sunday)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-serpapi-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  schedule:
+    # Niedziela 19:00 w Europie/Warszawa (wczesniej bylo 19:00 UTC = 21:00 latem w PL).
+    - cron: "0 19 * * 0"
+      timezone: "Europe/Warsaw"
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run pytest
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          DRY_RUN: "1"
+        run: python -m pytest tests -v --tb=short
+
+  serpapi-sunday:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [test-python]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run SerpAPI build
+        env:
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+        run: |
+          python build_contacts_serpapi.py --firm-target 200 --agency-target 200 --ecommerce-target 200 --max-requests-per-group 0 --max-requests-total 200 --cities "Wroclaw,Zielona Gora,Poznan" --output "$HOME/Kontakty_serpapi.xlsx"
