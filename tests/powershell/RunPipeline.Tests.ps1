@@ -65,4 +65,49 @@ Describe "run_pipeline.ps1" {
         $raw | Should Match '\$ErrorActionPreference\s*=\s*"Continue"'
         $raw | Should Match '\$prevEap'
     }
+
+    It "ma parametry SkipBuild i DryRun (jak CI: -SkipBuild -DryRun)" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match '\[switch\]\$SkipBuild'
+        $raw | Should Match '\[switch\]\$DryRun'
+    }
+
+    It "przekazuje --input --output-csv --extra-contacts-dir i --dry-run warunkowo" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match '--input", \$inputForClean'
+        $raw | Should Match '--output-csv", \$outputCsv'
+        $raw | Should Match 'if \(\$DryRun\)'
+        $raw | Should Match '--dry-run'
+    }
+
+    It "ma sciezki Kontakty_serpapi xlsx Kontakty_cleaned csv i pipeline_logs" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match 'Kontakty_serpapi\.xlsx'
+        $raw | Should Match 'Kontakty_cleaned\.csv'
+        $raw | Should Match 'pipeline_logs'
+        $raw | Should Match 'yyyyMMdd_HHmmss'
+    }
+
+    It "normalizuje buildOut tak jak cleanOut" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match '\$buildOut = @\(\$buildOut \| ForEach-Object'
+    }
+
+    It "obsluguje kod SerpAPI 2 i limit dzienny" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match 'SERPAPI_DAILY_LIMIT_ENABLED'
+        $raw | Should Match '\$buildExit -eq 2'
+    }
+
+    It "rzuca czytelny blad przy braku wejscia" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match 'Brak pliku wejsciowego'
+        $raw | Should Match '\.xlsx/\.xls/\.csv'
+    }
+
+    It "wymusza DryRun przy zlym GMAIL_APP_PASSWORD" {
+        $raw = Get-Content -LiteralPath $script:RunPipelinePath -Raw
+        $raw | Should Match 'Brak poprawnego GMAIL_APP_PASSWORD'
+        $raw | Should Match '\$DryRun = \$true'
+    }
 }
