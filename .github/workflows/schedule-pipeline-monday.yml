@@ -71,7 +71,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       needs.test-python.result == 'success' &&
       needs.test-powershell.result == 'success'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     needs: [test-python, test-powershell]
     steps:
@@ -85,24 +85,21 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Prepare input sample
-        shell: pwsh
         run: |
-          $docsDir = Join-Path $env:USERPROFILE "Documents"
-          $kontaktyDir = Join-Path $docsDir "kontakty"
-          New-Item -ItemType Directory -Path $kontaktyDir -Force | Out-Null
-          @"
+          DOCS_DIR="$HOME/Documents"
+          KONTAKTY_DIR="$DOCS_DIR/kontakty"
+          mkdir -p "$KONTAKTY_DIR"
+          cat > "$KONTAKTY_DIR/sample.csv" <<'CSV'
           company_name,email,phone,url,source_query
           Test Company,test@example.com,,https://example.com,test query
-          "@ | Out-File -FilePath (Join-Path $kontaktyDir "sample.csv") -Encoding utf8
+          CSV
 
       - name: Run pipeline
-        shell: pwsh
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -110,12 +107,17 @@ jobs:
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
           PIPELINE_PYTHON_EXE: python
         run: |
-          $skipBuild = "-SkipBuild"
-          $dryRun = "-DryRun"
-          $args = @()
-          if ($skipBuild) { $args += $skipBuild }
-          if ($dryRun) { $args += $dryRun }
-          ./run_pipeline.ps1 @args
+          DOCS_DIR="$HOME/Documents"
+          KONTAKTY_DIR="$DOCS_DIR/kontakty"
+          INPUT_PATH="$DOCS_DIR/Kontakty_serpapi.xlsx"
+          if [ ! -f "$INPUT_PATH" ]; then
+            INPUT_PATH="$KONTAKTY_DIR/sample.csv"
+          fi
+          python clean_validate_send_pipeline.py \
+            --input "$INPUT_PATH" \
+            --output-csv "$DOCS_DIR/Kontakty_cleaned.csv" \
+            --extra-contacts-dir "$KONTAKTY_DIR" \
+            --dry-run
 
       - name: Upload pipeline JSON backups
         if: always()

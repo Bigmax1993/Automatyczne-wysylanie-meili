@@ -152,8 +152,8 @@ Jeden plik workflow: [`.github/workflows/main.yml`](.github/workflows/main.yml).
 | Zdarzenie | Co się dzieje |
 |-----------|----------------|
 | `push` / `pull_request` | Joby **test-python** (Ubuntu, pytest) i **test-powershell** (Windows, Pester). Pipeline **nie** startuje automatycznie. |
-| `workflow_dispatch` | Te same testy; możesz niezależnie włączyć job **serpapi-sunday** (`run_serpapi=true`) i **pipeline** (`run_pipeline=true`). |
-| Harmonogram | Niedziela `0 19 * * 0` UTC — build SerpAPI (`serpapi-sunday`). Poniedziałek `0 2 * * 1` UTC — **pipeline** na runnerze Windows (domyślnie `-SkipBuild -DryRun`, bez realnej wysyłki SMTP). |
+| `workflow_dispatch` | Te same testy; opcjonalnie uruchamia się `serpapi-sunday` gdy `skip_build=false`, a potem `pipeline` (Python, bez PowerShell). |
+| Harmonogram | Niedziela `0 19 * * 0` UTC — build SerpAPI (`serpapi-sunday`). Poniedziałek `0 2 * * 1` UTC — **pipeline** na Ubuntu, uruchamiany przez `python clean_validate_send_pipeline.py` (bez `run_pipeline.ps1`). |
 
 Wymagane sekrety w repo (`Settings` → `Secrets and variables` → `Actions`):
 
@@ -162,7 +162,11 @@ Wymagane sekrety w repo (`Settings` → `Secrets and variables` → `Actions`):
 - `GMAIL_APP_PASSWORD`
 - `GMAIL_SENDER_EMAIL`
 
-Ręczne uruchomienie pipeline z Actions: *Actions* → *CI + Pipeline* → *Run workflow* → ustaw `run_pipeline=true`; `dry_run` domyślnie jest `true` (bez SMTP), chyba że ustawisz inaczej.
+Ręczne uruchomienie pipeline z Actions: *Actions* → *CI + Pipeline* → *Run workflow*.
+
+- `skip_build=true` (domyślnie): pomija SerpAPI, pipeline bierze `Documents/Kontakty_serpapi.xlsx` albo fallback `Documents/kontakty/sample.csv`.
+- `skip_build=false`: najpierw odpala SerpAPI (`serpapi-sunday`), potem pipeline.
+- `dry_run=true` (domyślnie): bez SMTP.
 
 Limity czasowe i artefakty w CI:
 
@@ -188,7 +192,7 @@ Nazwa repozytorium na GitHubie (bez spacji, znaki łacińskie): **`Automatyczne-
 2. W katalogu projektu (ten folder z `README.md`). Jeśli **nie** masz jeszcze lokalnego `.git`, uruchom `git init`, `git add -A`, `git commit -m "..."` (sprawdź `git status` — nie powinno być `local_env.ps1` ani `.env`). Następnie:
    ```powershell
    cd "$env:USERPROFILE\Automatyczne-wysylanie-meili"
-   gh repo create Automatyczne-wysylanie-meili --public --source=. --remote=origin --push --description "Automatyczne wysyłanie meili: SerpAPI, OpenAI, Gmail SMTP, PowerShell"
+   gh repo create Automatyczne-wysylanie-meili --public --source=. --remote=origin --push --description "Automatyczne wysyłanie meili: SerpAPI, OpenAI, Gmail SMTP, Python pipeline"
    ```
    Jeśli repozytorium **już istnieje** na koncie (puste), zamiast `gh repo create` użyj:
    ```powershell

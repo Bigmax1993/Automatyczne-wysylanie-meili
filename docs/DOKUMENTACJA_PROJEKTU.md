@@ -227,10 +227,11 @@ Patrz sekcja **Testy** w głównym [`README.md`](../README.md).
 ### GitHub Actions (workflow `CI + Pipeline`)
 
 - `push` / `pull_request`: uruchamiają testy (`test-python`, `test-powershell`).
-- `workflow_dispatch`: pozwala uruchomić testy oraz opcjonalnie `run_serpapi` i/lub `run_pipeline`.
+- `workflow_dispatch`: uruchamia testy; `serpapi-sunday` włącza się przy `skip_build=false`, po czym uruchamia się `pipeline`.
 - Harmonogram:
   - niedziela `0 19 * * 0` UTC: `serpapi-sunday`,
   - poniedziałek `0 2 * * 1` UTC: `pipeline`.
+- Job `pipeline` działa na `ubuntu-latest` i uruchamia bezpośrednio `python clean_validate_send_pipeline.py` (bez `run_pipeline.ps1` / PowerShell).
 - Ustawione limity czasu:
   - `test-python`: 30 min,
   - `test-powershell`: 30 min,
