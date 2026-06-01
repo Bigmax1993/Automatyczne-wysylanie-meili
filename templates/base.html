@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Forwardo TMS{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="nav-brand">
+      <span class="brand-icon">🚚</span>
+      <span class="brand-name">Forwardo TMS</span>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+      <a href="/shipments" class="nav-link {% if '/shipments' in request.url.path %}active{% endif %}">Shipments</a>
+      <a href="/customers" class="nav-link {% if '/customers' in request.url.path %}active{% endif %}">Customers</a>
+      <a href="/carriers" class="nav-link {% if '/carriers' in request.url.path %}active{% endif %}">Carriers</a>
+      <a href="/docs" class="nav-link" target="_blank">API Docs</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Forwardo TMS · Transportation Management System</p>
+  </footer>
+</body>
+</html>

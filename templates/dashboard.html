@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Forwardo TMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Dashboard</h1>
+  <a href="/shipments" class="btn btn-primary">+ New Shipment</a>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card stat-blue">
+    <div class="stat-value">{{ stats.total_shipments }}</div>
+    <div class="stat-label">Total Shipments</div>
+  </div>
+  <div class="stat-card stat-yellow">
+    <div class="stat-value">{{ stats.pending }}</div>
+    <div class="stat-label">Pending</div>
+  </div>
+  <div class="stat-card stat-orange">
+    <div class="stat-value">{{ stats.in_transit }}</div>
+    <div class="stat-label">In Transit</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-value">{{ stats.delivered }}</div>
+    <div class="stat-label">Delivered</div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div class="stat-value">{{ stats.total_customers }}</div>
+    <div class="stat-label">Customers</div>
+  </div>
+  <div class="stat-card stat-teal">
+    <div class="stat-value">{{ stats.total_carriers }}</div>
+    <div class="stat-label">Carriers</div>
+  </div>
+  <div class="stat-card stat-green wide">
+    <div class="stat-value">{{ "%.2f"|format(stats.revenue_this_month) }} PLN</div>
+    <div class="stat-label">Revenue This Month</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Recent Shipments</h2>
+    <a href="/shipments" class="btn btn-secondary">View All</a>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Reference</th>
+          <th>Status</th>
+          <th>Sender</th>
+          <th>Origin</th>
+          <th>Destination</th>
+          <th>Pickup</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_shipments %}
+        <tr class="clickable-row" data-href="/shipments/{{ s.id }}">
+          <td><a href="/shipments/{{ s.id }}" class="ref-link">{{ s.reference }}</a></td>
+          <td><span class="badge badge-{{ s.status.lower() }}">{{ s.status.replace('_', ' ') }}</span></td>
+          <td>{{ s.sender.name if s.sender else '—' }}</td>
+          <td>{{ s.origin_city }}, {{ s.origin_country }}</td>
+          <td>{{ s.destination_city }}, {{ s.destination_country }}</td>
+          <td>{{ s.pickup_date.strftime('%d %b %Y') if s.pickup_date else '—' }}</td>
+          <td>{% if s.price %}{{ "%.2f"|format(s.price) }} {{ s.currency }}{% else %}—{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-cell">No shipments yet. <a href="#" onclick="showNewShipmentForm()">Create the first one.</a></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

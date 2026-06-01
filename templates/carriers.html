@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Carriers · Forwardo TMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Carriers</h1>
+  <a href="/docs#/carriers/create_carrier_api_carriers__post" target="_blank" class="btn btn-primary">+ Add Carrier</a>
+</div>
+
+<div class="filters-bar">
+  <form method="get" class="filters-form">
+    <input type="text" name="search" value="{{ search }}" placeholder="Search name, email…" class="input-search" />
+    <button type="submit" class="btn btn-secondary">Search</button>
+    {% if search %}<a href="/carriers" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+  <span class="results-count">{{ carriers|length }} carrier{{ 's' if carriers|length != 1 }}</span>
+</div>
+
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr><th>Name</th><th>Email</th><th>Phone</th><th>City</th><th>Equipment</th><th>Max Weight</th><th>Rating</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for c in carriers %}
+      <tr>
+        <td><strong>{{ c.name }}</strong></td>
+        <td>{{ c.email or '—' }}</td>
+        <td>{{ c.phone or '—' }}</td>
+        <td>{{ c.city or '—' }}</td>
+        <td>{{ c.equipment_types or '—' }}</td>
+        <td>{{ c.max_weight_kg|string + ' kg' if c.max_weight_kg else '—' }}</td>
+        <td>
+          <span class="rating">
+            {% for i in range(5) %}{% if i < (c.rating|int) %}★{% else %}☆{% endif %}{% endfor %}
+            {{ c.rating }}
+          </span>
+        </td>
+        <td><span class="badge {% if c.is_active %}badge-active{% else %}badge-inactive{% endif %}">{{ 'Active' if c.is_active else 'Inactive' }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty-cell">No carriers yet. Add via the API.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

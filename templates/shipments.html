@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Shipments · Forwardo TMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Shipments</h1>
+  <button class="btn btn-primary" onclick="document.getElementById('new-shipment-modal').classList.add('open')">+ New Shipment</button>
+</div>
+
+<div class="filters-bar">
+  <form method="get" class="filters-form">
+    <input type="text" name="search" value="{{ search }}" placeholder="Search reference, city, customer…" class="input-search" />
+    <select name="status" class="select-filter">
+      <option value="">All statuses</option>
+      {% for st in statuses %}
+      <option value="{{ st }}" {% if st == status_filter %}selected{% endif %}>{{ st.replace('_', ' ') }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    {% if search or status_filter %}<a href="/shipments" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+  <span class="results-count">{{ total }} shipment{{ 's' if total != 1 }}</span>
+</div>
+
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Reference</th>
+        <th>Status</th>
+        <th>Sender</th>
+        <th>Origin → Destination</th>
+        <th>Pickup</th>
+        <th>Carrier</th>
+        <th>Price</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in shipments %}
+      <tr>
+        <td><a href="/shipments/{{ s.id }}" class="ref-link">{{ s.reference }}</a></td>
+        <td><span class="badge badge-{{ s.status.lower() }}">{{ s.status.replace('_', ' ') }}</span></td>
+        <td>{{ s.sender.name if s.sender else '—' }}</td>
+        <td>{{ s.origin_city }} → {{ s.destination_city }}</td>
+        <td>{{ s.pickup_date.strftime('%d %b %Y') if s.pickup_date else '—' }}</td>
+        <td>{{ s.carrier.name if s.carrier else '—' }}</td>
+        <td>{% if s.price %}{{ "%.2f"|format(s.price) }} {{ s.currency }}{% else %}—{% endif %}</td>
+        <td><a href="/shipments/{{ s.id }}" class="btn btn-ghost btn-sm">View</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty-cell">No shipments found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pages > 1 %}
+<div class="pagination">
+  {% for p in range(1, pages + 1) %}
+  <a href="?page={{ p }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+     class="page-btn {% if p == page %}active{% endif %}">{{ p }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- New Shipment Modal (placeholder - uses API) -->
+<div id="new-shipment-modal" class="modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>New Shipment</h2>
+      <button class="modal-close" onclick="document.getElementById('new-shipment-modal').classList.remove('open')">&times;</button>
+    </div>
+    <p class="modal-note">Use the <a href="/docs#/shipments/create_shipment_api_shipments__post" target="_blank">REST API</a> or fill in details below to create a new shipment.</p>
+    <div class="modal-actions">
+      <a href="/docs" target="_blank" class="btn btn-primary">Open API Docs</a>
+      <button class="btn btn-ghost" onclick="document.getElementById('new-shipment-modal').classList.remove('open')">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

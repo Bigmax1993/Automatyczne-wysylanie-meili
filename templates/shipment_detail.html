@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}{{ shipment.reference }} · Forwardo TMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="/shipments" class="back-link">← All Shipments</a>
+    <h1 class="page-title">{{ shipment.reference }}</h1>
+  </div>
+  <span class="badge badge-{{ shipment.status.lower() }} badge-lg">{{ shipment.status.replace('_', ' ') }}</span>
+</div>
+
+<div class="detail-grid">
+  <!-- Route Card -->
+  <div class="card">
+    <h3 class="card-title">Route</h3>
+    <div class="route-display">
+      <div class="route-point">
+        <span class="route-label">Origin</span>
+        <strong>{{ shipment.origin_city }}, {{ shipment.origin_country }}</strong>
+        <span class="route-sub">{{ shipment.origin_address }}</span>
+        {% if shipment.origin_postal_code %}<span class="route-sub">{{ shipment.origin_postal_code }}</span>{% endif %}
+      </div>
+      <div class="route-arrow">→</div>
+      <div class="route-point">
+        <span class="route-label">Destination</span>
+        <strong>{{ shipment.destination_city }}, {{ shipment.destination_country }}</strong>
+        <span class="route-sub">{{ shipment.destination_address }}</span>
+        {% if shipment.destination_postal_code %}<span class="route-sub">{{ shipment.destination_postal_code }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Pickup</span>
+      <span>{{ shipment.pickup_date.strftime('%d %b %Y %H:%M') if shipment.pickup_date else '—' }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Delivery</span>
+      <span>{{ shipment.delivery_date.strftime('%d %b %Y %H:%M') if shipment.delivery_date else '—' }}</span>
+    </div>
+    {% if shipment.actual_pickup_at %}
+    <div class="info-row">
+      <span class="info-label">Actual Pickup</span>
+      <span class="text-green">{{ shipment.actual_pickup_at.strftime('%d %b %Y %H:%M') }}</span>
+    </div>
+    {% endif %}
+    {% if shipment.actual_delivery_at %}
+    <div class="info-row">
+      <span class="info-label">Actual Delivery</span>
+      <span class="text-green">{{ shipment.actual_delivery_at.strftime('%d %b %Y %H:%M') }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Cargo Card -->
+  <div class="card">
+    <h3 class="card-title">Cargo</h3>
+    <div class="info-row"><span class="info-label">Commodity</span><span>{{ shipment.commodity or '—' }}</span></div>
+    <div class="info-row"><span class="info-label">Weight</span><span>{{ shipment.weight_kg|string + ' kg' if shipment.weight_kg else '—' }}</span></div>
+    <div class="info-row"><span class="info-label">Volume</span><span>{{ shipment.volume_m3|string + ' m³' if shipment.volume_m3 else '—' }}</span></div>
+    <div class="info-row"><span class="info-label">Loading Meters</span><span>{{ shipment.loading_meters|string + ' ldm' if shipment.loading_meters else '—' }}</span></div>
+    <div class="info-row"><span class="info-label">Pallets</span><span>{{ shipment.pallet_count or '—' }}</span></div>
+    <div class="info-row"><span class="info-label">Hazardous</span><span>{{ '⚠️ Yes' if shipment.is_hazardous else 'No' }}</span></div>
+    <div class="info-row"><span class="info-label">Temp. Controlled</span><span>{{ '❄️ Yes' if shipment.temperature_controlled else 'No' }}</span></div>
+  </div>
+
+  <!-- Parties Card -->
+  <div class="card">
+    <h3 class="card-title">Parties</h3>
+    <div class="info-section">
+      <span class="info-label">Sender</span>
+      {% if shipment.sender %}
+      <strong>{{ shipment.sender.name }}</strong>
+      <span class="text-muted">{{ shipment.sender.email or '' }}</span>
+      <span class="text-muted">{{ shipment.sender.phone or '' }}</span>
+      {% else %}<span>—</span>{% endif %}
+    </div>
+    <hr class="divider" />
+    <div class="info-section">
+      <span class="info-label">Receiver</span>
+      {% if shipment.receiver %}
+      <strong>{{ shipment.receiver.name }}</strong>
+      <span class="text-muted">{{ shipment.receiver.email or '' }}</span>
+      <span class="text-muted">{{ shipment.receiver.phone or '' }}</span>
+      {% else %}<span>—</span>{% endif %}
+    </div>
+    <hr class="divider" />
+    <div class="info-section">
+      <span class="info-label">Carrier</span>
+      {% if shipment.carrier %}
+      <strong>{{ shipment.carrier.name }}</strong>
+      <span class="text-muted">{{ shipment.carrier.phone or '' }}</span>
+      {% else %}<span class="text-muted">Not assigned</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- Financials Card -->
+  <div class="card">
+    <h3 class="card-title">Financials</h3>
+    <div class="info-row">
+      <span class="info-label">Price</span>
+      <span class="price-display">{% if shipment.price %}{{ "%.2f"|format(shipment.price) }} {{ shipment.currency }}{% else %}—{% endif %}</span>
+    </div>
+    {% if shipment.notes %}
+    <div class="notes-box">{{ shipment.notes }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Status Timeline -->
+  <div class="card card-wide">
+    <h3 class="card-title">Status Timeline</h3>
+    <div class="timeline">
+      {% for h in shipment.status_history|reverse %}
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <span class="badge badge-{{ h.status.lower() }}">{{ h.status.replace('_', ' ') }}</span>
+          <span class="timeline-time">{{ h.created_at.strftime('%d %b %Y %H:%M') }}</span>
+          {% if h.location %}<span class="timeline-location">📍 {{ h.location }}</span>{% endif %}
+          {% if h.note %}<p class="timeline-note">{{ h.note }}</p>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Quotes -->
+  {% if shipment.quotes %}
+  <div class="card card-wide">
+    <h3 class="card-title">Quotes</h3>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>Carrier</th><th>Price</th><th>Valid Until</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for q in shipment.quotes %}
+          <tr>
+            <td>{{ q.carrier.name if q.carrier else q.carrier_id }}</td>
+            <td>{{ "%.2f"|format(q.price) }} {{ q.currency }}</td>
+            <td>{{ q.valid_until.strftime('%d %b %Y') if q.valid_until else '—' }}</td>
+            <td><span class="badge badge-{{ q.status.lower() }}">{{ q.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="api-hint">
+  <strong>Tip:</strong> Update status or assign carriers via the <a href="/docs" target="_blank">REST API</a>
+  — <code>PATCH /api/shipments/{{ shipment.id }}</code> or <code>POST /api/shipments/{{ shipment.id }}/status</code>
+</div>
+{% endblock %}
