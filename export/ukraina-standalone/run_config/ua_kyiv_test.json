@@ -1,0 +1,10 @@
+{
+  "active_bundeslaender": ["Kyiv"],
+  "min_contacts_target": 10,
+  "geo_filter_enabled": false,
+  "require_generalunternehmer": true,
+  "require_market_projects_in_portfolio": false,
+  "require_website_references_or_portfolio": false,
+  "serper_daily_limit": 50,
+  "claude_daily_limit": 100
+}
