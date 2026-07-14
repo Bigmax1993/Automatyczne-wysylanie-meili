@@ -13,15 +13,9 @@ on:
         required: false
         type: string
         default: tue
-      resume_artifact_run_id:
-        description: "Run ID do wznowienia (ua-materialy-wyniki-pi)"
-        required: false
-        type: string
-        default: "29269564038"
 
 permissions:
   contents: read
-  actions: read
 
 env:
   SCRAPER_TIMEZONE: Europe/Warsaw
@@ -51,7 +45,7 @@ jobs:
       - name: Apply discovery fix
         run: python3 deploy/ua-discovery-fix/apply_fix.py ua-repo/ua_materialy_scraper.py
 
-      - name: Set up Python scraper
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -63,34 +57,6 @@ jobs:
         run: |
           pip install -r requirements.txt
           python -m playwright install chromium --with-deps
-        env:
-          KANBUD_PROJECT_ROOT: ${{ github.workspace }}/ua-repo/libs
-
-      - name: Push fix to UA master (optional)
-        if: secrets.UA_REPO_TOKEN
-        working-directory: ua-repo
-        env:
-          GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ua_materialy_scraper.py
-          if git diff --staged --quiet; then
-            echo "No changes to push"
-          else
-            git commit -m "Fix serper-only discovery: defer Claude www verify to Sunday"
-            git push "https://x-access-token:${GH_TOKEN}@github.com/Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina.git" HEAD:master
-          fi
-
-      - name: Download previous Wyniki (optional)
-        if: secrets.UA_REPO_TOKEN
-        uses: actions/download-artifact@v4
-        with:
-          name: ua-materialy-wyniki-pi
-          github-token: ${{ secrets.UA_REPO_TOKEN }}
-          run-id: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_artifact_run_id || '29269564038' }}
-          path: ua-repo
-        continue-on-error: true
 
       - name: Discovery (serper-only, patched)
         working-directory: ua-repo
@@ -98,7 +64,7 @@ jobs:
           KANBUD_PROJECT_ROOT: ${{ github.workspace }}/ua-repo/libs
         run: |
           if [ -z "$SERPER_API_KEY" ] || [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::Brak SERPER_API_KEY lub ANTHROPIC_API_KEY w secrets repo Automatyczne-wysylanie-meili"
+            echo "::error::Dodaj secrets SERPER_API_KEY i ANTHROPIC_API_KEY w repo Automatyczne-wysylanie-meili"
             exit 1
           fi
           PHASE="${{ github.event_name == 'workflow_dispatch' && inputs.discovery_phase || 'tue' }}"
