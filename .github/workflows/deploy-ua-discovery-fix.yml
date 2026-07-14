@@ -13,19 +13,25 @@ on:
         required: false
         type: string
         default: tue
-      resume_artifact_run_id:
-        description: "Run ID do wznowienia (ua-materialy-wyniki-pi)"
-        required: false
-        type: string
-        default: "29269564038"
 
 permissions:
   contents: read
 
+env:
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  DISABLE_SEND_WINDOW: "1"
+  SERPER_DAILY_LIMIT: "1000"
+  CLAUDE_UNLIMITED: "1"
+  SCRAPER_MAX_RUNTIME_SECONDS: "14400"
+  UA_REGIONAL_INQUIRY_EMAIL_FROM: "2026-07-13"
+
 jobs:
-  deploy-and-run:
+  discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 310
+    env:
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,38 +41,49 @@ jobs:
           repository: Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina
           path: ua-repo
 
-      - name: Apply discovery fix to scraper
+      - name: Apply discovery fix
         run: python3 deploy/ua-discovery-fix/apply_fix.py ua-repo/ua_materialy_scraper.py
 
-      - name: Patch UA discovery workflow (apply fix before run)
-        run: python3 deploy/ua-discovery-fix/patch_ua_workflow.py ua-repo/.github/workflows/ua_materialy_pi.yml
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ua-repo/requirements.txt
 
-      - name: Push fix to UA master
+      - name: Install scraper dependencies
+        working-directory: ua-repo
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install chromium --with-deps
+
+      - name: Discovery (serper-only, patched)
         working-directory: ua-repo
         env:
-          GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
+          KANBUD_PROJECT_ROOT: ${{ github.workspace }}/ua-repo/libs
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Brak UA_REPO_TOKEN w repo Automatyczne-wysylanie-meili."
-            echo "::error::Sekrety SERPER_API_KEY i ANTHROPIC_API_KEY są w repo wyszukiwarka-materialow-budowlanych-ukraina — discovery musi tam lecieć."
-            echo "::error::Dodaj UA_REPO_TOKEN (PAT: contents:write + actions:write na repo UA) albo zmerguj fix ręcznie i uruchom UA discovery."
+          if [ -z "$SERPER_API_KEY" ]; then
+            echo "::error::Brak SERPER_API_KEY w secrets repo Automatyczne-wysylanie-meili"
+            echo "::error::Skopiuj SERPER_API_KEY i ANTHROPIC_API_KEY z repo wyszukiwarka-materialow-budowlanych-ukraina → Settings → Secrets → Actions"
             exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ua_materialy_scraper.py .github/workflows/ua_materialy_pi.yml
-          if git diff --staged --quiet; then
-            echo "Brak zmian do push"
-          else
-            git commit -m "Fix serper-only discovery: defer Claude www verify to Sunday"
-            git push "https://x-access-token:${GH_TOKEN}@github.com/Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina.git" HEAD:master
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::Brak ANTHROPIC_API_KEY w secrets repo Automatyczne-wysylanie-meili"
+            exit 1
           fi
+          PHASE="${{ github.event_name == 'workflow_dispatch' && inputs.discovery_phase || 'tue' }}"
+          ARGS="--run-config run_config/ua_materialy.json --serper-only-discovery --no-auto-email --rotate-oblast"
+          if [ "$PHASE" != "mon" ]; then
+            ARGS="$ARGS --respect-cache"
+          fi
+          python ua_materialy_scraper.py $ARGS
 
-      - name: Trigger UA discovery (używa SERPER_API_KEY z repo UA)
-        env:
-          GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
-        run: |
-          gh workflow run ua_materialy_pi.yml \
-            -R Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina \
-            -f discovery_phase="${{ github.event_name == 'workflow_dispatch' && inputs.discovery_phase || 'tue' }}" \
-            -f resume_artifact_run_id="${{ github.event_name == 'workflow_dispatch' && inputs.resume_artifact_run_id || '29269564038' }}"
+      - name: Upload Wyniki artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-materialy-wyniki-pi-proxy-${{ github.run_id }}
+          path: |
+            ua-repo/Wyniki/
+            ua-repo/wyslane/
+          if-no-files-found: warn
