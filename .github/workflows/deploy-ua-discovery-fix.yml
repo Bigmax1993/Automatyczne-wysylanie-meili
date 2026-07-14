@@ -1,6 +1,11 @@
 name: Deploy UA Discovery fix
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/ua-discovery-fix/**"
+      - ".github/workflows/deploy-ua-discovery-fix.yml"
   workflow_dispatch:
     inputs:
       discovery_phase:
@@ -30,8 +35,28 @@ jobs:
           repository: Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina
           path: ua-repo
 
-      - name: Apply discovery fix
+      - name: Apply discovery fix to scraper
         run: python3 deploy/ua-discovery-fix/apply_fix.py ua-repo/ua_materialy_scraper.py
+
+      - name: Patch UA discovery workflow (apply fix before run)
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path("ua-repo/.github/workflows/ua_materialy_pi.yml")
+          text = p.read_text()
+          needle = '      - name: Discovery (serper-only, pon-pt)\n        run: |\n          ARGS='
+          insert = '''      - name: Discovery (serper-only, pon-pt)
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/Bigmax1993/Automatyczne-wysylanie-meili/main/deploy/ua-discovery-fix/apply_fix.py" -o /tmp/apply_discovery_fix.py
+          python3 /tmp/apply_discovery_fix.py ua_materialy_scraper.py
+          ARGS='''
+          if "apply_discovery_fix.py" not in text:
+              text = text.replace(needle, insert, 1)
+              p.write_text(text)
+              print("Patched ua_materialy_pi.yml")
+          else:
+              print("Workflow already patched")
+          PY
 
       - name: Push fix to UA master
         working-directory: ua-repo
@@ -39,24 +64,26 @@ jobs:
           GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Brak UA_REPO_TOKEN. Dodaj PAT (contents:write + actions:write) w Settings → Secrets repo Automatyczne-wysylanie-meili. Sekrety SERPER/ANTHROPIC są w repo UA — discovery musi lecieć tam."
+            echo "::error::Brak UA_REPO_TOKEN w repo Automatyczne-wysylanie-meili."
+            echo "::error::Sekrety SERPER_API_KEY i ANTHROPIC_API_KEY są w repo wyszukiwarka-materialow-budowlanych-ukraina — discovery musi tam lecieć."
+            echo "::error::Dodaj UA_REPO_TOKEN (PAT: contents:write + actions:write na repo UA) albo zmerguj fix ręcznie i uruchom UA discovery."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ua_materialy_scraper.py
+          git add ua_materialy_scraper.py .github/workflows/ua_materialy_pi.yml
           if git diff --staged --quiet; then
-            echo "Fix już na master UA"
+            echo "Brak zmian do push"
           else
             git commit -m "Fix serper-only discovery: defer Claude www verify to Sunday"
             git push "https://x-access-token:${GH_TOKEN}@github.com/Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina.git" HEAD:master
           fi
 
-      - name: Trigger UA discovery (sekrety SERPER/ANTHROPIC z repo UA)
+      - name: Trigger UA discovery (używa SERPER_API_KEY z repo UA)
         env:
           GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
         run: |
           gh workflow run ua_materialy_pi.yml \
             -R Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina \
-            -f discovery_phase="${{ inputs.discovery_phase }}" \
-            -f resume_artifact_run_id="${{ inputs.resume_artifact_run_id }}"
+            -f discovery_phase="${{ github.event_name == 'workflow_dispatch' && inputs.discovery_phase || 'tue' }}" \
+            -f resume_artifact_run_id="${{ github.event_name == 'workflow_dispatch' && inputs.resume_artifact_run_id || '29269564038' }}"
