@@ -1,0 +1,64 @@
+name: Deploy UA Discovery fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_discovery:
+        description: "Uruchom UA discovery po wdrożeniu fixa"
+        required: false
+        type: boolean
+        default: true
+      discovery_phase:
+        description: "Faza discovery (tue, mon, ...)"
+        required: false
+        type: string
+        default: tue
+      resume_artifact_run_id:
+        description: "Run ID do wznowienia (ua-materialy-wyniki-pi)"
+        required: false
+        type: string
+        default: "29269564038"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout UA repo
+        uses: actions/checkout@v4
+        with:
+          repository: Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina
+          token: ${{ secrets.UA_REPO_TOKEN }}
+          path: ua-repo
+
+      - name: Apply discovery fix
+        run: python3 deploy/ua-discovery-fix/apply_fix.py ua-repo/ua_materialy_scraper.py
+
+      - name: Commit and push to UA master
+        working-directory: ua-repo
+        env:
+          GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ua_materialy_scraper.py
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Fix serper-only discovery: defer Claude www verify to Sunday"
+            git push origin HEAD:master
+          fi
+
+      - name: Trigger UA discovery
+        if: inputs.trigger_discovery
+        env:
+          GH_TOKEN: ${{ secrets.UA_REPO_TOKEN }}
+        run: |
+          gh workflow run ua_materialy_pi.yml \
+            -R Bigmax1993/wyszukiwarka-materialow-budowlanych-ukraina \
+            -f discovery_phase="${{ inputs.discovery_phase }}" \
+            -f resume_artifact_run_id="${{ inputs.resume_artifact_run_id }}"
