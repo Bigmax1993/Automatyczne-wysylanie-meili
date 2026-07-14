@@ -39,24 +39,7 @@ jobs:
         run: python3 deploy/ua-discovery-fix/apply_fix.py ua-repo/ua_materialy_scraper.py
 
       - name: Patch UA discovery workflow (apply fix before run)
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          p = Path("ua-repo/.github/workflows/ua_materialy_pi.yml")
-          text = p.read_text()
-          needle = '      - name: Discovery (serper-only, pon-pt)\n        run: |\n          ARGS='
-          insert = '''      - name: Discovery (serper-only, pon-pt)
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/Bigmax1993/Automatyczne-wysylanie-meili/main/deploy/ua-discovery-fix/apply_fix.py" -o /tmp/apply_discovery_fix.py
-          python3 /tmp/apply_discovery_fix.py ua_materialy_scraper.py
-          ARGS='''
-          if "apply_discovery_fix.py" not in text:
-              text = text.replace(needle, insert, 1)
-              p.write_text(text)
-              print("Patched ua_materialy_pi.yml")
-          else:
-              print("Workflow already patched")
-          PY
+        run: python3 deploy/ua-discovery-fix/patch_ua_workflow.py ua-repo/.github/workflows/ua_materialy_pi.yml
 
       - name: Push fix to UA master
         working-directory: ua-repo
