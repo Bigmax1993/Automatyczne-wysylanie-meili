@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Apply serper-only discovery fix to ua_materialy_scraper.py."""
+# trigger: auto-deploy via push to main
 from __future__ import annotations
 
 import sys

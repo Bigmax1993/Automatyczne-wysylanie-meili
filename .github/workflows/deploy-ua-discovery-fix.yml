@@ -1,6 +1,11 @@
 name: Deploy UA Discovery fix
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/ua-discovery-fix/**"
+      - ".github/workflows/deploy-ua-discovery-fix.yml"
   workflow_dispatch:
     inputs:
       trigger_discovery:
