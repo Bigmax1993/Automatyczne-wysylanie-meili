@@ -1,11 +1,11 @@
-# Pełny pipeline prognoza-meczy uruchamiany z tego repo (sekrety z Automatyczne-wysylanie-meili).
+# Pełny pipeline prognoza-meczy: predykcje + wysyłka Gmail (bez pomijania wysyłki).
 name: Prognoza-meczy pełny pipeline
 
 on:
   workflow_dispatch:
     inputs:
       skip_send:
-        description: "Tylko predykcje, bez wysyłki maila"
+        description: "Tylko predykcje, bez wysyłki maila (wyłącznie ręcznie)"
         required: false
         default: false
         type: boolean
@@ -19,9 +19,9 @@ permissions:
   contents: read
 
 jobs:
-  predykcje:
+  pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       PYTHONIOENCODING: utf-8
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -64,68 +64,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  send:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_send != true }}
-    needs: predykcje
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Uruchom wysyłkę w prognoza-meczy (sekrety Gmail są tam)
+      - name: Wyślij mail (wymagane)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_send != true }}
+        working-directory: prognoza-meczy
         env:
-          S1: ${{ secrets.PROGNOZA_MECZY_PAT }}
-          S2: ${{ secrets.GITHUB_PAT }}
-          S3: ${{ secrets.GH_PAT }}
-          S4: ${{ secrets.PAT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
         run: |
           set -euo pipefail
-          TOKEN=""
-          for candidate in "$S1" "$S2" "$S3" "$S4"; do
-            [ -n "$candidate" ] && TOKEN="$candidate" && break
-          done
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::Brak PAT — nie mogę uruchomić wysyłki w prognoza-meczy z tego workflow."
-            echo "::warning::Predykcje zakończone OK. Uruchom ręcznie:"
-            echo "::warning::https://github.com/Bigmax1993/prognoza-meczy/actions/workflows/send-mail.yml"
-            exit 0
-          fi
-          code=$(curl -s -o /tmp/send_dispatch.json -w "%{http_code}" -X POST \
-            -H "Authorization: token ${TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/Bigmax1993/prognoza-meczy/actions/workflows/send-mail.yml/dispatches" \
-            -d '{"ref":"main"}')
-          if [ "$code" != "204" ]; then
-            echo "::error::Nie udało się uruchomić wysyłki (HTTP $code)"
-            cat /tmp/send_dispatch.json
+          USER="${GMAIL_USER:-$GMAIL_SENDER_EMAIL}"
+          missing=""
+          [ -z "$USER" ] && missing="${missing} GMAIL_USER lub GMAIL_SENDER_EMAIL"
+          [ -z "$GMAIL_APP_PASSWORD" ] && missing="${missing} GMAIL_APP_PASSWORD"
+          [ -z "$MAIL_TO" ] && missing="${missing} MAIL_TO"
+          if [ -n "$missing" ]; then
+            echo "::error::Brak sekretów Gmail w repo Automatyczne-wysylanie-meili:$missing"
+            echo "::error::Wysyłka NIE może być pominięta. Skopiuj sekrety z prognoza-meczy:"
+            echo "::error::Settings → Secrets → Actions → GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO"
             exit 1
           fi
-          echo "Uruchomiono Wysyłka Gmail poniedziałek w prognoza-meczy."
-
-      - name: Czekaj na zakończenie wysyłki w prognoza-meczy
-        env:
-          S1: ${{ secrets.PROGNOZA_MECZY_PAT }}
-          S2: ${{ secrets.GITHUB_PAT }}
-          S3: ${{ secrets.GH_PAT }}
-          S4: ${{ secrets.PAT }}
-        run: |
-          set -euo pipefail
-          TOKEN=""
-          for candidate in "$S1" "$S2" "$S3" "$S4"; do
-            [ -n "$candidate" ] && TOKEN="$candidate" && break
-          done
-          [ -z "$TOKEN" ] && echo "Pominięto monitorowanie (brak PAT)." && exit 0
-          for i in $(seq 1 30); do
-            RUN=$(curl -s -H "Authorization: token ${TOKEN}" \
-              "https://api.github.com/repos/Bigmax1993/prognoza-meczy/actions/workflows/send-mail.yml/runs?per_page=1" \
-              | python3 -c "import sys,json; r=json.load(sys.stdin)['workflow_runs'][0]; print(r['status'], r.get('conclusion') or '-', r['html_url'])")
-            echo "[$i/30] send-mail: $RUN"
-            STATUS=$(echo "$RUN" | awk '{print $1}')
-            CONCLUSION=$(echo "$RUN" | awk '{print $2}')
-            if [ "$STATUS" = "completed" ]; then
-              [ "$CONCLUSION" = "success" ] && exit 0
-              echo "::error::Wysyłka w prognoza-meczy zakończona: $CONCLUSION"
-              exit 1
-            fi
-            sleep 10
-          done
-          echo "::error::Timeout oczekiwania na wysyłkę w prognoza-meczy"
-          exit 1
+          export GMAIL_USER="$USER"
+          test -f predykcje_2026.xlsx
+          python send_mail.py --plik predykcje_2026.xlsx
+          echo "Wysłano mail z predykcje_2026.xlsx"
