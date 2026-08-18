@@ -1,0 +1,59 @@
+name: Deploy prognoza-meczy send-mail fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/prognoza-meczy-send-mail/**"
+      - ".github/workflows/deploy-prognoza-send-mail.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sprawdź token deploy
+        env:
+          PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+        run: |
+          if [ -z "$PROGNOZA_MECZY_PAT" ]; then
+            echo "::error::Brak sekretu PROGNOZA_MECZY_PAT w repo Automatyczne-wysylanie-meili."
+            echo "::error::Dodaj PAT z uprawnieniem repo do Bigmax1993/prognoza-meczy (Settings → Secrets → Actions)."
+            exit 1
+          fi
+
+      - name: Checkout prognoza-meczy
+        uses: actions/checkout@v4
+        with:
+          repository: Bigmax1993/prognoza-meczy
+          token: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          path: prognoza-meczy
+
+      - name: Zastosuj poprawkę wysyłki
+        run: python3 deploy/prognoza-meczy-send-mail/apply_fix.py prognoza-meczy
+
+      - name: Commit i push na prognoza-meczy
+        working-directory: prognoza-meczy
+        env:
+          PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Brak zmian — prognoza-meczy już ma poprawkę."
+            exit 0
+          fi
+          git add .github/workflows/send-mail.yml scripts/fetch_predykcje_artifact.py tests/test_fetch_predykcje_artifact.py
+          git commit -m "Fix send-mail workflow artifact download.
+
+Replace gh CLI artifact lookup with GitHub API helper, clearer errors
+when Sunday pipeline has not run yet, and optional allow_repo_fallback
+for manual workflow_dispatch testing."
+          git push origin HEAD:main
