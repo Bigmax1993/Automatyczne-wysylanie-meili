@@ -1,0 +1,50 @@
+# Niedziela 20:00 czasu polskiego (CEST = UTC+2). Zimą (CET) będzie 21:00.
+# GitHub Actions cron jest zawsze w UTC.
+name: Pipeline niedziela
+
+on:
+  schedule:
+    - cron: "0 18 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  predykcje:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONIOENCODING: utf-8
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wyczyść cache JSON i logi
+        run: |
+          set -euo pipefail
+          rm -f cache/*.json cache/*.log 2>/dev/null || true
+          rm -rf logs/* 2>/dev/null || true
+          mkdir -p cache logs
+          echo "Wyczyszczono cache/*.json, cache/*.log oraz logs/"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Zależności
+        run: pip install -r requirements.txt
+
+      - name: Uruchom pipeline
+        run: python predykcje.py --fill-missing
+
+      - name: Artifact Excel
+        uses: actions/upload-artifact@v4
+        with:
+          name: predykcje-xlsx
+          path: predykcje_2026.xlsx
+          if-no-files-found: error
+          retention-days: 7

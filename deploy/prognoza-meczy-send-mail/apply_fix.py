@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent
 COPY_MAP = {
     ROOT / "scripts/fetch_predykcje_artifact.py": "scripts/fetch_predykcje_artifact.py",
     ROOT / ".github/workflows/send-mail.yml": ".github/workflows/send-mail.yml",
+    ROOT / ".github/workflows/pipeline.yml": ".github/workflows/pipeline.yml",
     ROOT / "tests/test_fetch_predykcje_artifact.py": "tests/test_fetch_predykcje_artifact.py",
 }
 

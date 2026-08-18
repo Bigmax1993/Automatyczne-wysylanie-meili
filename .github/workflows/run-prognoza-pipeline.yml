@@ -33,12 +33,14 @@ jobs:
           repository: Bigmax1993/prognoza-meczy
           path: prognoza-meczy
 
-      - uses: actions/cache@v4
-        with:
-          path: prognoza-meczy/cache/missing_data.json
-          key: missing-data-prognoza-${{ github.run_id }}
-          restore-keys: |
-            missing-data-prognoza-
+      - name: Wyczyść cache JSON i logi
+        working-directory: prognoza-meczy
+        run: |
+          set -euo pipefail
+          rm -f cache/*.json cache/*.log 2>/dev/null || true
+          rm -rf logs/* 2>/dev/null || true
+          mkdir -p cache logs
+          echo "Wyczyszczono cache/*.json, cache/*.log oraz logs/"
 
       - uses: actions/setup-python@v5
         with:
