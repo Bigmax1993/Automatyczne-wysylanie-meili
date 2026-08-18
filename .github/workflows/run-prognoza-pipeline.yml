@@ -1,0 +1,105 @@
+# Pełny pipeline prognoza-meczy uruchamiany z tego repo (sekrety z Automatyczne-wysylanie-meili).
+name: Prognoza-meczy pełny pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_send:
+        description: "Tylko predykcje, bez wysyłki maila"
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/run-prognoza-pipeline.yml"
+      - "deploy/prognoza-meczy-send-mail/.run-pipeline"
+
+permissions:
+  contents: read
+
+jobs:
+  predykcje:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONIOENCODING: utf-8
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+    steps:
+      - name: Checkout prognoza-meczy
+        uses: actions/checkout@v4
+        with:
+          repository: Bigmax1993/prognoza-meczy
+          path: prognoza-meczy
+
+      - uses: actions/cache@v4
+        with:
+          path: prognoza-meczy/cache/missing_data.json
+          key: missing-data-prognoza-${{ github.run_id }}
+          restore-keys: |
+            missing-data-prognoza-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: prognoza-meczy/requirements.txt
+
+      - name: Zależności
+        working-directory: prognoza-meczy
+        run: pip install -r requirements.txt
+
+      - name: Uruchom predykcje.py --fill-missing
+        working-directory: prognoza-meczy
+        run: python predykcje.py --fill-missing
+
+      - name: Artifact Excel
+        uses: actions/upload-artifact@v4
+        with:
+          name: predykcje-xlsx-${{ github.run_id }}
+          path: prognoza-meczy/predykcje_2026.xlsx
+          if-no-files-found: error
+          retention-days: 7
+
+  send:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_send != true }}
+    needs: predykcje
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: predykcje-xlsx-${{ github.run_id }}
+          path: .
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Przygotuj sekrety Gmail
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: |
+          set -euo pipefail
+          USER="${GMAIL_USER:-$GMAIL_SENDER_EMAIL}"
+          missing=""
+          [ -z "$USER" ] && missing="${missing} GMAIL_USER/GMAIL_SENDER_EMAIL"
+          [ -z "$GMAIL_APP_PASSWORD" ] && missing="${missing} GMAIL_APP_PASSWORD"
+          [ -z "$MAIL_TO" ] && missing="${missing} MAIL_TO"
+          if [ -n "$missing" ]; then
+            echo "::error::Brak sekretów w Automatyczne-wysylanie-meili:$missing"
+            echo "::error::Skopiuj GMAIL_USER i MAIL_TO z repo prognoza-meczy albo uruchom wysyłkę tam."
+            exit 1
+          fi
+          echo "GMAIL_USER=$USER" >> "$GITHUB_ENV"
+          echo "GMAIL_APP_PASSWORD=$GMAIL_APP_PASSWORD" >> "$GITHUB_ENV"
+          echo "MAIL_TO=$MAIL_TO" >> "$GITHUB_ENV"
+
+      - name: Wyślij mail
+        run: python3 deploy/prognoza-meczy-send-mail/send_mail.py --plik predykcje_2026.xlsx
