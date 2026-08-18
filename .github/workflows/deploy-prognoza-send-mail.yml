@@ -20,17 +20,25 @@ jobs:
 
       - name: Rozwiąż token deploy
         env:
-          P1: ${{ secrets.PROGNOZA_MECZY_PAT }}
-          P2: ${{ secrets.GITHUB_PAT }}
-          P3: ${{ secrets.GH_PAT }}
+          S1: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          S2: ${{ secrets.GITHUB_PAT }}
+          S3: ${{ secrets.GH_PAT }}
+          S4: ${{ secrets.PAT }}
+          S5: ${{ secrets.GH_TOKEN }}
+          S6: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           TOKEN=""
-          [ -n "$P1" ] && TOKEN="$P1"
-          [ -z "$TOKEN" ] && [ -n "$P2" ] && TOKEN="$P2"
-          [ -z "$TOKEN" ] && [ -n "$P3" ] && TOKEN="$P3"
+          for candidate in "$S1" "$S2" "$S3" "$S4" "$S5" "$S6"; do
+            if [ -n "$candidate" ]; then
+              TOKEN="$candidate"
+              break
+            fi
+          done
           if [ -z "$TOKEN" ]; then
-            echo "::warning::Brak PAT (PROGNOZA_MECZY_PAT / GITHUB_PAT / GH_PAT) — pomijam deploy do prognoza-meczy."
-            echo "::warning::Wysyłka działa przez workflow „Prognoza-meczy wysyłka Gmail” w tym repo."
+            echo "::warning::Brak PAT w repo Automatyczne-wysylanie-meili."
+            echo "::warning::Sekrety Gmail z prognoza-meczy NIE są widoczne tutaj — to osobne repozytoria."
+            echo "::warning::Aby wypchnąć poprawkę: dodaj PROGNOZA_MECZY_PAT tutaj (Settings → Secrets)."
+            echo "::warning::Aby wysłać mail teraz: uruchom „Wysyłka Gmail poniedziałek” w repo prognoza-meczy."
             echo "SKIP_DEPLOY=1" >> "$GITHUB_ENV"
             exit 0
           fi
@@ -65,3 +73,12 @@ jobs:
           git commit -m "Fix send-mail workflow artifact download." \
             -m "Replace gh CLI artifact lookup with GitHub API helper, clearer errors when Sunday pipeline has not run yet, and optional allow_repo_fallback for manual workflow_dispatch testing."
           git push "https://x-access-token:${PROGNOZA_MECZY_PAT}@github.com/Bigmax1993/prognoza-meczy.git" HEAD:main
+
+  notify:
+    if: always() && needs.deploy.result == 'success'
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Podpowiedź po deploy
+        run: |
+          echo "Poprawka jest na prognoza-meczy. Uruchom: Actions → Wysyłka Gmail poniedziałek → Run workflow"

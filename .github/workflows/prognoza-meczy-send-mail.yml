@@ -1,15 +1,14 @@
-# Wysyłka prognoz z repo prognoza-meczy (proxy — działa bez pusha do tamtego repo).
-name: Prognoza-meczy wysyłka Gmail
+# Wysyłka prognoz — wymaga sekretów GMAIL_* i MAIL_TO w TYM repo (Automatyczne-wysylanie-meili).
+# Sekrety z repo prognoza-meczy nie są tu dostępne. Do wysyłki użyj workflow w prognoza-meczy.
+name: Prognoza-meczy wysyłka Gmail (proxy)
 
 on:
-  schedule:
-    - cron: "0 0 * * 1"
   workflow_dispatch:
     inputs:
       use_repo_xlsx_only:
         description: "Użyj predykcje_2026.xlsx z main (bez artifactu pipeline)"
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -30,7 +29,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Przygotuj sekrety Gmail
+      - name: Przygotuj sekrety Gmail (repo Automatyczne-wysylanie-meili)
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
@@ -39,51 +38,47 @@ jobs:
         run: |
           set -euo pipefail
           USER="${GMAIL_USER:-$GMAIL_SENDER_EMAIL}"
-          if [ -z "$USER" ] || [ -z "$GMAIL_APP_PASSWORD" ] || [ -z "$MAIL_TO" ]; then
-            echo "::error::Ustaw sekrety: GMAIL_USER (lub GMAIL_SENDER_EMAIL), GMAIL_APP_PASSWORD, MAIL_TO"
+          missing=""
+          [ -z "$USER" ] && missing="${missing} GMAIL_USER lub GMAIL_SENDER_EMAIL"
+          [ -z "$GMAIL_APP_PASSWORD" ] && missing="${missing} GMAIL_APP_PASSWORD"
+          [ -z "$MAIL_TO" ] && missing="${missing} MAIL_TO"
+          if [ -n "$missing" ]; then
+            echo "::error::Brak sekretów w repo Automatyczne-wysylanie-meili:$missing"
+            echo "::error::Sekrety dodane do prognoza-meczy NIE działają w tym repo."
+            echo "::error::Uruchom zamiast tego: prognoza-meczy → Actions → Wysyłka Gmail poniedziałek → Run workflow"
             exit 1
           fi
           echo "GMAIL_USER=$USER" >> "$GITHUB_ENV"
           echo "GMAIL_APP_PASSWORD=$GMAIL_APP_PASSWORD" >> "$GITHUB_ENV"
           echo "MAIL_TO=$MAIL_TO" >> "$GITHUB_ENV"
 
-      - name: Pobierz Excel (artifact pipeline lub fallback z repo)
+      - name: Pobierz Excel
         env:
-          P1: ${{ secrets.PROGNOZA_MECZY_PAT }}
-          P2: ${{ secrets.GITHUB_PAT }}
-          P3: ${{ secrets.GH_PAT }}
-          USE_REPO_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.use_repo_xlsx_only == true }}
+          S1: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          S2: ${{ secrets.GITHUB_PAT }}
+          S3: ${{ secrets.GH_PAT }}
+          S4: ${{ secrets.PAT }}
+          USE_REPO_ONLY: ${{ inputs.use_repo_xlsx_only }}
         run: |
           set -euo pipefail
           TOKEN=""
-          [ -n "$P1" ] && TOKEN="$P1"
-          [ -z "$TOKEN" ] && [ -n "$P2" ] && TOKEN="$P2"
-          [ -z "$TOKEN" ] && [ -n "$P3" ] && TOKEN="$P3"
+          for candidate in "$S1" "$S2" "$S3" "$S4"; do
+            [ -n "$candidate" ] && TOKEN="$candidate" && break
+          done
 
-          if [ "$USE_REPO_ONLY" = "true" ]; then
-            echo "Ręczny tryb: pobieram xlsx z repo main."
+          if [ "$USE_REPO_ONLY" = "true" ] || [ -z "$TOKEN" ]; then
             curl -fsSL "https://raw.githubusercontent.com/${PROGNOZA_REPO}/main/predykcje_2026.xlsx" -o predykcje_2026.xlsx
+            test -f predykcje_2026.xlsx
             exit 0
           fi
 
-          if [ -n "$TOKEN" ]; then
-            curl -fsSL "https://raw.githubusercontent.com/${PROGNOZA_REPO}/main/predykcje_2026.xlsx" -o predykcje_repo.xlsx
-            export GITHUB_TOKEN="$TOKEN"
-            if python3 deploy/prognoza-meczy-send-mail/scripts/fetch_predykcje_artifact.py \
-              --repo "$PROGNOZA_REPO" \
-              --branch main \
-              --dest predykcje_2026.xlsx \
-              --fallback predykcje_repo.xlsx; then
-              test -f predykcje_2026.xlsx
-              exit 0
-            fi
-            echo "::warning::Artifact niedostępny — fallback na plik z repo main."
-            cp predykcje_repo.xlsx predykcje_2026.xlsx
-          else
-            echo "::warning::Brak PAT (PROGNOZA_MECZY_PAT/GITHUB_PAT) — używam pliku z repo main."
-          fi
-
-          curl -fsSL "https://raw.githubusercontent.com/${PROGNOZA_REPO}/main/predykcje_2026.xlsx" -o predykcje_2026.xlsx
+          curl -fsSL "https://raw.githubusercontent.com/${PROGNOZA_REPO}/main/predykcje_2026.xlsx" -o predykcje_repo.xlsx
+          export GITHUB_TOKEN="$TOKEN"
+          python3 deploy/prognoza-meczy-send-mail/scripts/fetch_predykcje_artifact.py \
+            --repo "$PROGNOZA_REPO" \
+            --branch main \
+            --dest predykcje_2026.xlsx \
+            --fallback predykcje_repo.xlsx
           test -f predykcje_2026.xlsx
 
       - name: Wyślij mail
