@@ -12,13 +12,16 @@ permissions:
   actions: write
 
 jobs:
-  predykcje:
+  pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       PYTHONIOENCODING: utf-8
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,3 +51,18 @@ jobs:
           path: predykcje_2026.xlsx
           if-no-files-found: error
           retention-days: 7
+
+      - name: Wyślij mail (wymagane)
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -z "$GMAIL_USER" ] && missing="${missing} GMAIL_USER"
+          [ -z "$GMAIL_APP_PASSWORD" ] && missing="${missing} GMAIL_APP_PASSWORD"
+          [ -z "$MAIL_TO" ] && missing="${missing} MAIL_TO"
+          if [ -n "$missing" ]; then
+            echo "::error::Brak sekretów Gmail w prognoza-meczy:$missing"
+            exit 1
+          fi
+          test -f predykcje_2026.xlsx
+          python send_mail.py --plik predykcje_2026.xlsx
+          echo "Wysłano mail z predykcje_2026.xlsx"
