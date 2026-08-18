@@ -2,11 +2,6 @@
 name: Prognoza-meczy wysyłka Gmail
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "deploy/prognoza-meczy-send-mail/**"
-      - ".github/workflows/prognoza-meczy-send-mail.yml"
   schedule:
     - cron: "0 0 * * 1"
   workflow_dispatch:
