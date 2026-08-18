@@ -7,6 +7,11 @@ on:
       - "deploy/prognoza-meczy-send-mail/**"
       - ".github/workflows/deploy-prognoza-send-mail.yml"
   workflow_dispatch:
+    inputs:
+      deploy_token:
+        description: "PAT (scope repo) do push na prognoza-meczy — gdy brak PROGNOZA_MECZY_PAT w Secrets"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +25,7 @@ jobs:
 
       - name: Rozwiąż token deploy
         env:
+          S0: ${{ inputs.deploy_token }}
           S1: ${{ secrets.PROGNOZA_MECZY_PAT }}
           S2: ${{ secrets.GITHUB_PAT }}
           S3: ${{ secrets.GH_PAT }}
@@ -28,7 +34,7 @@ jobs:
           S6: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           TOKEN=""
-          for candidate in "$S1" "$S2" "$S3" "$S4" "$S5" "$S6"; do
+          for candidate in "$S0" "$S1" "$S2" "$S3" "$S4" "$S5" "$S6"; do
             if [ -n "$candidate" ]; then
               TOKEN="$candidate"
               break
@@ -37,7 +43,7 @@ jobs:
           if [ -z "$TOKEN" ]; then
             echo "::warning::Brak PAT w repo Automatyczne-wysylanie-meili."
             echo "::warning::Sekrety Gmail z prognoza-meczy NIE są widoczne tutaj — to osobne repozytoria."
-            echo "::warning::Aby wypchnąć poprawkę: dodaj PROGNOZA_MECZY_PAT tutaj (Settings → Secrets)."
+            echo "::warning::Aby wypchnąć poprawkę: dodaj PROGNOZA_MECZY_PAT w Secrets LUB uruchom workflow_dispatch z polem deploy_token."
             echo "::warning::Aby wysłać mail teraz: uruchom „Wysyłka Gmail poniedziałek” w repo prognoza-meczy."
             echo "SKIP_DEPLOY=1" >> "$GITHUB_ENV"
             exit 0
