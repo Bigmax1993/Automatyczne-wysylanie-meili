@@ -18,30 +18,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sprawdź token deploy
+      - name: Rozwiąż token deploy
         env:
-          PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          P1: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          P2: ${{ secrets.GITHUB_PAT }}
+          P3: ${{ secrets.GH_PAT }}
         run: |
-          if [ -z "$PROGNOZA_MECZY_PAT" ]; then
-            echo "::error::Brak sekretu PROGNOZA_MECZY_PAT w repo Automatyczne-wysylanie-meili."
-            echo "::error::Dodaj PAT z uprawnieniem repo do Bigmax1993/prognoza-meczy (Settings → Secrets → Actions)."
-            exit 1
+          TOKEN=""
+          [ -n "$P1" ] && TOKEN="$P1"
+          [ -z "$TOKEN" ] && [ -n "$P2" ] && TOKEN="$P2"
+          [ -z "$TOKEN" ] && [ -n "$P3" ] && TOKEN="$P3"
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Brak PAT (PROGNOZA_MECZY_PAT / GITHUB_PAT / GH_PAT) — pomijam deploy do prognoza-meczy."
+            echo "::warning::Wysyłka działa przez workflow „Prognoza-meczy wysyłka Gmail” w tym repo."
+            echo "SKIP_DEPLOY=1" >> "$GITHUB_ENV"
+            exit 0
           fi
+          echo "PROGNOZA_MECZY_PAT=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Checkout prognoza-meczy
+        if: env.SKIP_DEPLOY != '1'
         uses: actions/checkout@v4
         with:
           repository: Bigmax1993/prognoza-meczy
-          token: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          token: ${{ env.PROGNOZA_MECZY_PAT }}
           path: prognoza-meczy
 
       - name: Zastosuj poprawkę wysyłki
+        if: env.SKIP_DEPLOY != '1'
         run: python3 deploy/prognoza-meczy-send-mail/apply_fix.py prognoza-meczy
 
       - name: Commit i push na prognoza-meczy
+        if: env.SKIP_DEPLOY != '1'
         working-directory: prognoza-meczy
         env:
-          PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          PROGNOZA_MECZY_PAT: ${{ env.PROGNOZA_MECZY_PAT }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
