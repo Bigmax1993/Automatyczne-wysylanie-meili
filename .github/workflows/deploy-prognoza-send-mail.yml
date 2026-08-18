@@ -51,9 +51,6 @@ jobs:
             exit 0
           fi
           git add .github/workflows/send-mail.yml scripts/fetch_predykcje_artifact.py tests/test_fetch_predykcje_artifact.py
-          git commit -m "Fix send-mail workflow artifact download.
-
-Replace gh CLI artifact lookup with GitHub API helper, clearer errors
-when Sunday pipeline has not run yet, and optional allow_repo_fallback
-for manual workflow_dispatch testing."
+          git commit -m "Fix send-mail workflow artifact download." \
+            -m "Replace gh CLI artifact lookup with GitHub API helper, clearer errors when Sunday pipeline has not run yet, and optional allow_repo_fallback for manual workflow_dispatch testing."
           git push origin HEAD:main
