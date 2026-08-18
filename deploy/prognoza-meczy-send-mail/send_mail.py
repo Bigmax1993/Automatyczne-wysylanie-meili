@@ -48,9 +48,9 @@ def _hydrate_user_env() -> None:
 
 
 def mail_config() -> tuple[str, str, str]:
-    user = _env("GMAIL_USER")
+    user = _env("GMAIL_USER") or _env("GMAIL_SENDER_EMAIL") or _env("SENDER_EMAIL")
     password = _env("GMAIL_APP_PASSWORD").replace(" ", "")
-    to = _env("MAIL_TO")
+    to = _env("MAIL_TO") or _env("EMAIL_TO") or _env("RECIPIENT_EMAIL")
     if not user or not password or not to:
         missing = [
             n
