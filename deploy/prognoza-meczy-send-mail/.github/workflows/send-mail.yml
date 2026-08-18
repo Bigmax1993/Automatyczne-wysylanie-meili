@@ -1,5 +1,4 @@
 # Poniedziałek 02:00 czasu polskiego (CEST = UTC+2). Zimą (CET) będzie 03:00.
-# GitHub Actions cron jest zawsze w UTC.
 name: Wysyłka Gmail poniedziałek
 
 on:
@@ -8,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       allow_repo_fallback:
-        description: "Gdy brak artifactu pipeline — użyj predykcje_2026.xlsx z repo (tylko testy)"
+        description: "Gdy brak artifactu pipeline — użyj predykcje_2026.xlsx z repo"
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -34,9 +33,13 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Pobierz Excel z niedzielnego pipeline
+      - name: Pobierz Excel
         run: |
           set -euo pipefail
+          if [ -s predykcje_2026.xlsx ]; then
+            echo "Używam predykcje_2026.xlsx z repozytorium (commit / CI)."
+            exit 0
+          fi
           ARGS=(
             --repo "${{ github.repository }}"
             --branch main
@@ -45,7 +48,13 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.allow_repo_fallback }}" = "true" ]; then
             ARGS+=(--fallback predykcje_2026.xlsx)
           fi
-          python scripts/fetch_predykcje_artifact.py "${ARGS[@]}"
+          python scripts/fetch_predykcje_artifact.py "${ARGS[@]}" || {
+            if [ -s predykcje_2026.xlsx ]; then
+              echo "Artifact niedostępny — używam pliku z repo."
+              exit 0
+            fi
+            exit 1
+          }
           test -f predykcje_2026.xlsx
 
       - name: Wyślij mail

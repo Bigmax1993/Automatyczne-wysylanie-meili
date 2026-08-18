@@ -5,10 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       skip_send:
-        description: "Tylko predykcje, bez wysyłki maila (wyłącznie ręcznie)"
+        description: "Tylko predykcje, bez wysyłki maila"
         required: false
         default: false
         type: boolean
+      gmail_app_password:
+        description: "Awaryjnie: hasło aplikacji Gmail (gdy brak w Secrets)"
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
@@ -27,6 +31,9 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
       PROGNOZA_REPO: Bigmax1993/prognoza-meczy
+      # Domyślne adresy z README prognoza-meczy (publiczne — nie są sekretem)
+      DEFAULT_GMAIL_USER: svinchak1993@gmail.com
+      DEFAULT_MAIL_TO: Swinczakaleksy@gmail.com
     steps:
       - name: Checkout prognoza-meczy
         uses: actions/checkout@v4
@@ -41,7 +48,6 @@ jobs:
           rm -f cache/*.json cache/*.log 2>/dev/null || true
           rm -rf logs/* 2>/dev/null || true
           mkdir -p cache logs
-          echo "Wyczyszczono cache/*.json, cache/*.log oraz logs/"
 
       - uses: actions/setup-python@v5
         with:
@@ -68,11 +74,13 @@ jobs:
       - name: Wyślij mail (wymagane)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_send != true }}
         env:
+          INPUT_GMAIL_PASSWORD: ${{ inputs.gmail_app_password }}
           GU1: ${{ secrets.GMAIL_USER }}
           GU2: ${{ secrets.GMAIL_SENDER_EMAIL }}
           GU3: ${{ secrets.SENDER_EMAIL }}
           GP1: ${{ secrets.GMAIL_APP_PASSWORD }}
           GP2: ${{ secrets.GMAIL_PASSWORD }}
+          GP3: ${{ secrets.GMAIL_APP_PASS }}
           MT1: ${{ secrets.MAIL_TO }}
           MT2: ${{ secrets.EMAIL_TO }}
           MT3: ${{ secrets.RECIPIENT_EMAIL }}
@@ -94,74 +102,66 @@ jobs:
             return 1
           }
 
-          GMAIL_USER="$(resolve_first "$GU1" "$GU2" "$GU3" || true)"
-          GMAIL_APP_PASSWORD="$(resolve_first "$GP1" "$GP2" || true)"
-          MAIL_TO="$(resolve_first "$MT1" "$MT2" "$MT3" || true)"
+          export GMAIL_USER="$(resolve_first "$GU1" "$GU2" "$GU3" "$DEFAULT_GMAIL_USER")"
+          export MAIL_TO="$(resolve_first "$MT1" "$MT2" "$MT3" "$DEFAULT_MAIL_TO")"
+          export GMAIL_APP_PASSWORD="$(resolve_first "$INPUT_GMAIL_PASSWORD" "$GP1" "$GP2" "$GP3" || true)"
           PAT="$(resolve_first "$P1" "$P2" "$P3" "$P4" "$P5" "$P6" || true)"
 
           send_local() {
-            export GMAIL_USER GMAIL_APP_PASSWORD MAIL_TO
+            [ -n "$GMAIL_APP_PASSWORD" ] || return 1
             python prognoza-meczy/send_mail.py --plik "$XLSX"
-            echo "Wysłano mail lokalnie (sekrety z tego repo)."
+            echo "Wysłano mail (SMTP z tego workflow)."
           }
 
           send_via_prognoza_meczy() {
             [ -n "$PAT" ] || return 1
-            echo "Wysyłka przez workflow w prognoza-meczy (sekrety Gmail są tam)..."
+            echo "Wysyłka przez prognoza-meczy (sekrety Gmail są w tamtym repo)..."
             work="$(mktemp -d)"
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
               clone --depth 1 "https://x-access-token:${PAT}@github.com/${PROGNOZA_REPO}.git" "$work/repo"
             cp "$XLSX" "$work/repo/predykcje_2026.xlsx"
+            base="https://raw.githubusercontent.com/Bigmax1993/Automatyczne-wysylanie-meili/main/deploy/prognoza-meczy-send-mail"
+            mkdir -p "$work/repo/.github/workflows" "$work/repo/scripts" "$work/repo/tests"
+            curl -fsSL "$base/.github/workflows/send-mail.yml" -o "$work/repo/.github/workflows/send-mail.yml"
+            curl -fsSL "$base/scripts/fetch_predykcje_artifact.py" -o "$work/repo/scripts/fetch_predykcje_artifact.py"
             cd "$work/repo"
-            git add predykcje_2026.xlsx
+            git add predykcje_2026.xlsx .github/workflows/send-mail.yml scripts/fetch_predykcje_artifact.py
             if ! git diff --staged --quiet; then
-              git commit -m "ci: aktualizacja predykcje_2026.xlsx przed wysyłką [skip ci]"
+              git commit -m "ci: świeże predykcje + poprawka send-mail [skip ci]"
               git push origin main
             fi
             code=$(curl -s -o /tmp/send_dispatch.json -w "%{http_code}" -X POST \
               -H "Authorization: token ${PAT}" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${PROGNOZA_REPO}/actions/workflows/send-mail.yml/dispatches" \
-              -d '{"ref":"main"}')
+              -d '{"ref":"main","inputs":{"allow_repo_fallback":"true"}}')
             if [ "$code" != "204" ]; then
-              echo "::error::Nie udało się uruchomić send-mail w prognoza-meczy (HTTP $code)"
+              echo "::error::Dispatch send-mail HTTP $code"
               cat /tmp/send_dispatch.json
               return 1
             fi
-            echo "Uruchomiono Wysyłka Gmail poniedziałek w prognoza-meczy."
             for i in $(seq 1 36); do
               RUN=$(curl -s -H "Authorization: token ${PAT}" \
                 "https://api.github.com/repos/${PROGNOZA_REPO}/actions/workflows/send-mail.yml/runs?per_page=1" \
                 | python3 -c "import sys,json; r=json.load(sys.stdin)['workflow_runs'][0]; print(r['status'], r.get('conclusion') or '-', r['html_url'])")
-              echo "[$i/36] send-mail: $RUN"
+              echo "[$i/36] $RUN"
               STATUS=$(echo "$RUN" | awk '{print $1}')
               CONCLUSION=$(echo "$RUN" | awk '{print $2}')
               if [ "$STATUS" = "completed" ]; then
                 [ "$CONCLUSION" = "success" ] && return 0
-                echo "::error::Wysyłka w prognoza-meczy zakończona: $CONCLUSION ($RUN)"
+                echo "::error::send-mail: $CONCLUSION ($RUN)"
                 return 1
               fi
               sleep 10
             done
-            echo "::error::Timeout oczekiwania na wysyłkę w prognoza-meczy"
             return 1
           }
 
-          if [ -n "$GMAIL_USER" ] && [ -n "$GMAIL_APP_PASSWORD" ] && [ -n "$MAIL_TO" ]; then
-            send_local
-            exit 0
-          fi
+          if send_local; then exit 0; fi
+          if send_via_prognoza_meczy; then exit 0; fi
 
-          echo "Brak pełnych sekretów Gmail w Automatyczne-wysylanie-meili — próbuję prognoza-meczy..."
-          if send_via_prognoza_meczy; then
-            exit 0
-          fi
-
-          echo "::error::Nie udało się wysłać maila."
-          echo "::error::Opcja A: w Automatyczne-wysylanie-meili dodaj GMAIL_USER (lub GMAIL_SENDER_EMAIL), GMAIL_APP_PASSWORD, MAIL_TO"
-          echo "::error::Opcja B: dodaj PROGNOZA_MECZY_PAT (scope repo) — wtedy wysyłka idzie przez prognoza-meczy, gdzie masz już sekrety Gmail"
-          [ -z "$GMAIL_USER" ] && echo "::error::  brak: GMAIL_USER / GMAIL_SENDER_EMAIL / SENDER_EMAIL"
-          [ -z "$GMAIL_APP_PASSWORD" ] && echo "::error::  brak: GMAIL_APP_PASSWORD"
-          [ -z "$MAIL_TO" ] && echo "::error::  brak: MAIL_TO / EMAIL_TO / RECIPIENT_EMAIL"
-          [ -z "$PAT" ] && echo "::error::  brak: PROGNOZA_MECZY_PAT (do uruchomienia send-mail w prognoza-meczy)"
+          echo "::error::WYSYŁKA NIEUDANA."
+          echo "::error::Sekrety Gmail są w repo prognoza-meczy — GitHub NIE udostępnia ich innemu repo."
+          echo "::error::Dodaj JEDEN sekret w Automatyczne-wysylanie-meili → Settings → Secrets:"
+          echo "::error::  • GMAIL_APP_PASSWORD  LUB  • PROGNOZA_MECZY_PAT (token repo do prognoza-meczy)"
           exit 1
