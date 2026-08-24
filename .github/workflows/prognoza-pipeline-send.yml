@@ -1,0 +1,55 @@
+name: Prognoza-meczy pipeline i wysylka
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PYTHONIOENCODING: utf-8
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
+    steps:
+      - name: Checkout prognoza-meczy
+        uses: actions/checkout@v4
+        with:
+          repository: Bigmax1993/prognoza-meczy
+          path: prognoza-meczy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: prognoza-meczy/requirements.txt
+
+      - name: Zależności
+        working-directory: prognoza-meczy
+        run: pip install -r requirements.txt
+
+      - name: Pipeline + wysyłka
+        working-directory: prognoza-meczy
+        run: |
+          set -euo pipefail
+          for v in GMAIL_USER GMAIL_APP_PASSWORD MAIL_TO; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Brak sekretu $v w repo Automatyczne-wysylanie-meili (Settings → Secrets)."
+              exit 1
+            fi
+          done
+          python predykcje.py --fill-missing --refresh-upcoming --send-mail
+
+      - name: Artifact Excel
+        uses: actions/upload-artifact@v4
+        with:
+          name: predykcje-xlsx
+          path: prognoza-meczy/predykcje_2026.xlsx
+          if-no-files-found: error
+          retention-days: 7
