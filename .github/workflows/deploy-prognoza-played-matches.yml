@@ -51,8 +51,5 @@ jobs:
             exit 0
           fi
           git add upcoming.py predykcje.py tests/test_upcoming.py tests/test_predykcje.py
-          git commit -m "Zawsze dopisuj rozegrane mecze do arkusza Матчі_2026.
-
-Pobieraj wyniki FT z BBC (21 dni wstecz), uruchamiaj enrich_scores przed
-pipeline i przenoś mecze z datą < dziś lub wynikiem do arkusza Матчі_2026."
-          git push origin HEAD:main
+          git commit -m "Zawsze dopisuj rozegrane mecze do arkusza Матчі_2026" -m "BBC FT (21 dni), enrich_scores, split_played_and_future."
+          git push https://x-access-token:${PROGNOZA_MECZY_PAT}@github.com/Bigmax1993/prognoza-meczy.git HEAD:main
