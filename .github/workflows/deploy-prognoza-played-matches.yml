@@ -1,0 +1,58 @@
+name: Deploy prognoza-meczy played matches fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/prognoza-meczy-played-matches/**"
+      - ".github/workflows/deploy-prognoza-played-matches.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sprawdź token deploy
+        env:
+          PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+        run: |
+          if [ -z "$PROGNOZA_MECZY_PAT" ]; then
+            echo "::error::Brak sekretu PROGNOZA_MECZY_PAT w repo Automatyczne-wysylanie-meili."
+            echo "::error::Dodaj PAT z uprawnieniem repo do Bigmax1993/prognoza-meczy."
+            exit 1
+          fi
+
+      - name: Checkout prognoza-meczy
+        uses: actions/checkout@v4
+        with:
+          repository: Bigmax1993/prognoza-meczy
+          token: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          path: prognoza-meczy
+
+      - name: Zastosuj poprawkę rozegranych meczów
+        run: python3 deploy/prognoza-meczy-played-matches/apply_fix.py prognoza-meczy
+
+      - name: Commit i push na prognoza-meczy
+        working-directory: prognoza-meczy
+        env:
+          PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Brak zmian — prognoza-meczy już ma poprawkę."
+            exit 0
+          fi
+          git add upcoming.py predykcje.py tests/test_upcoming.py tests/test_predykcje.py
+          git commit -m "Zawsze dopisuj rozegrane mecze do arkusza Матчі_2026.
+
+Pobieraj wyniki FT z BBC (21 dni wstecz), uruchamiaj enrich_scores przed
+pipeline i przenoś mecze z datą < dziś lub wynikiem do arkusza Матчі_2026."
+          git push origin HEAD:main
