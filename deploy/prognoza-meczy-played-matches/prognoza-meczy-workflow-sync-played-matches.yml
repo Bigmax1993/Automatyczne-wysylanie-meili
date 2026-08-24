@@ -1,0 +1,39 @@
+# Ręcznie: skopiuj ten plik do prognoza-meczy/.github/workflows/ i uruchom Actions → Run workflow.
+# Pobiera poprawkę z publicznego repo Automatyczne-wysylanie-meili (bez PAT).
+name: Sync played matches fix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pobierz poprawkę z Automatyczne-wysylanie-meili
+        env:
+          BASE: https://raw.githubusercontent.com/Bigmax1993/Automatyczne-wysylanie-meili/main/deploy/prognoza-meczy-played-matches/files
+        run: |
+          set -euo pipefail
+          for f in upcoming.py predykcje.py tests/test_upcoming.py tests/test_predykcje.py; do
+            curl -fsSL "$BASE/$f" -o "$f"
+            echo "OK $f"
+          done
+
+      - name: Commit i push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Brak zmian — poprawka już wdrożona."
+            exit 0
+          fi
+          git add upcoming.py predykcje.py tests/test_upcoming.py tests/test_predykcje.py
+          git commit -m "Zawsze dopisuj rozegrane mecze do arkusza Матчі_2026" -m "BBC FT (21 dni), enrich_scores, split_played_and_future."
+          git push

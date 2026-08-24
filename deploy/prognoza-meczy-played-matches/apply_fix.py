@@ -14,6 +14,7 @@ TARGETS = [
     "predykcje.py",
     "tests/test_upcoming.py",
     "tests/test_predykcje.py",
+    ".github/workflows/sync-played-matches.yml",
 ]
 
 

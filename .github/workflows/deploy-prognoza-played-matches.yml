@@ -21,18 +21,27 @@ jobs:
       - name: Sprawdź token deploy
         env:
           PROGNOZA_MECZY_PAT: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          PAT: ${{ secrets.PAT }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          if [ -z "$PROGNOZA_MECZY_PAT" ]; then
-            echo "::error::Brak sekretu PROGNOZA_MECZY_PAT w repo Automatyczne-wysylanie-meili."
+          TOKEN=""
+          for candidate in "$PROGNOZA_MECZY_PAT" "$GITHUB_PAT" "$GH_PAT" "$PAT" "$PERSONAL_ACCESS_TOKEN"; do
+            [ -n "$candidate" ] && TOKEN="$candidate" && break
+          done
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Brak PAT w secrets (PROGNOZA_MECZY_PAT, GITHUB_PAT, GH_PAT, PAT, PERSONAL_ACCESS_TOKEN)."
             echo "::error::Dodaj PAT z uprawnieniem repo do Bigmax1993/prognoza-meczy."
             exit 1
           fi
+          echo "PROGNOZA_MECZY_PAT=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Checkout prognoza-meczy
         uses: actions/checkout@v4
         with:
           repository: Bigmax1993/prognoza-meczy
-          token: ${{ secrets.PROGNOZA_MECZY_PAT }}
+          token: ${{ env.PROGNOZA_MECZY_PAT }}
           path: prognoza-meczy
 
       - name: Zastosuj poprawkę rozegranych meczów
@@ -50,6 +59,6 @@ jobs:
             echo "Brak zmian — prognoza-meczy już ma poprawkę."
             exit 0
           fi
-          git add upcoming.py predykcje.py tests/test_upcoming.py tests/test_predykcje.py
+          git add upcoming.py predykcje.py tests/test_upcoming.py tests/test_predykcje.py .github/workflows/sync-played-matches.yml
           git commit -m "Zawsze dopisuj rozegrane mecze do arkusza Матчі_2026" -m "BBC FT (21 dni), enrich_scores, split_played_and_future."
           git push https://x-access-token:${PROGNOZA_MECZY_PAT}@github.com/Bigmax1993/prognoza-meczy.git HEAD:main
