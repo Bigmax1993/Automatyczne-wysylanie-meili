@@ -1,0 +1,50 @@
+name: CI Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  test-and-validate:
+    runs-on: ubuntu-latest
+    env:
+      KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+      PYTHONUTF8: "1"
+      DISABLE_SEND_WINDOW: "1"
+      SCRAPER_TIMEZONE: Europe/Warsaw
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install chromium --with-deps
+
+      - name: Smoke tests
+        run: python ua_materialy_scraper.py --test
+
+      - name: Validate secrets (presence only)
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          python -c "
+          import os, sys
+          missing = [k for k in ('SERPER_API_KEY','ANTHROPIC_API_KEY','MAIL_USER','MAIL_PASSWORD') if not (os.environ.get(k) or '').strip()]
+          if missing:
+              print('MISSING SECRETS:', ', '.join(missing))
+              sys.exit(1)
+          print('OK: wymagane secrets ustawione (wartosci ukryte).')
+          "
+
+      - name: Dry-run email pipeline (bez wysylki SMTP)
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+        run: python ua_materialy_scraper.py --dry-run-email --send-emails-only

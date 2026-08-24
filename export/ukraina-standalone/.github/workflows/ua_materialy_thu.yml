@@ -1,0 +1,87 @@
+name: UA niedziela backfill
+
+# Kampania UA — backfill niedziela
+on:
+  schedule:
+    - cron: "30 5 * * 0"
+      timezone: Europe/Warsaw
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: "Opcjonalnie run ID piatku (ua-materialy-wyniki-pi)."
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ua-pipeline
+  cancel-in-progress: false
+
+env:
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  SERPER_DAILY_LIMIT: "1000"
+  CLAUDE_UNLIMITED: "1"
+  KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-scraper
+
+      - name: Resolve artifact run (piatek)
+        id: artifact_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FORCED="${{ github.event_name == 'workflow_dispatch' && inputs.artifact_run_id || '' }}"
+          if [ -n "$FORCED" ]; then
+            RUN_ID="$FORCED"
+          else
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.name=="ua-materialy-wyniki-pi" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')
+          fi
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::Brak artefaktu ua-materialy-wyniki-pi"
+            exit 1
+          fi
+          echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download cache from discovery
+        uses: actions/download-artifact@v4
+        with:
+          name: ua-materialy-wyniki-pi
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifact_run.outputs.run-id }}
+          path: .
+
+      - name: Verify pending www + backfill and rebuild Excel
+        run: |
+          CFG="--run-config run_config/ua_materialy.json"
+          python ua_materialy_scraper.py $CFG --verify-pending-contacts --reverify-all-contacts
+          python ua_materialy_scraper.py $CFG --backfill-emails-from-cache
+          python ua_materialy_scraper.py $CFG --rebuild-from-cache
+
+      - name: Upload Wyniki artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-materialy-wyniki-thu
+          path: |
+            Wyniki/
+            wyslane/
+
+      - name: Chain — sync Google Drive UA
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/gha_chain_workflow.sh "Sync wyniki Google Drive UA"

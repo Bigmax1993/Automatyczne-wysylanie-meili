@@ -1,0 +1,1 @@
+# Testy regresyjne kampanii GU.
