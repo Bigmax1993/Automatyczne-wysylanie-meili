@@ -1,6 +1,10 @@
 name: Prognoza Discovery B
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/prognoza-discovery-b.yml"
   schedule:
     - cron: "0 2 * * 1"
       timezone: "Europe/Warsaw"

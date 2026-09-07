@@ -1,6 +1,9 @@
 name: Prognoza Wysylka
 
 on:
+  workflow_run:
+    workflows: ["Prognoza Discovery B"]
+    types: [completed]
   schedule:
     - cron: "0 6 * * 1"
       timezone: "Europe/Warsaw"
@@ -16,6 +19,12 @@ concurrency:
 
 jobs:
   send:
+    if: |
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
@@ -46,40 +55,46 @@ jobs:
             fi
           done
 
-          DEADLINE=$(( $(date +%s) + 4*3600 ))
           RUN_ID=""
-          while true; do
-            RUN_JSON=$(gh run list --workflow prognoza-discovery-b.yml --limit 1 --json databaseId,status,conclusion,createdAt)
-            RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].databaseId // empty')
-            STATUS=$(echo "$RUN_JSON" | jq -r '.[0].status // empty')
-            CONCLUSION=$(echo "$RUN_JSON" | jq -r '.[0].conclusion // empty')
-            CREATED_AT=$(echo "$RUN_JSON" | jq -r '.[0].createdAt // empty')
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            CREATED_AT="${{ github.event.workflow_run.created_at }}"
+          else
+            DEADLINE=$(( $(date +%s) + 4*3600 ))
+            while true; do
+              RUN_JSON=$(gh run list --workflow prognoza-discovery-b.yml --limit 1 --json databaseId,status,conclusion,createdAt)
+              RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].databaseId // empty')
+              STATUS=$(echo "$RUN_JSON" | jq -r '.[0].status // empty')
+              CONCLUSION=$(echo "$RUN_JSON" | jq -r '.[0].conclusion // empty')
+              CREATED_AT=$(echo "$RUN_JSON" | jq -r '.[0].createdAt // empty')
 
-            if [ -z "$RUN_ID" ]; then
-              echo "::error::Brak runów workflow prognoza-discovery-b.yml"
-              exit 1
-            fi
-
-            if [ "$STATUS" = "completed" ]; then
-              if [ "$CONCLUSION" != "success" ]; then
-                echo "::error::Najnowszy Discovery B ($RUN_ID) ma conclusion=$CONCLUSION"
+              if [ -z "$RUN_ID" ]; then
+                echo "::error::Brak runów workflow prognoza-discovery-b.yml"
                 exit 1
               fi
-              AGE_HOURS=$(python3 -c 'import datetime,sys; ts=sys.argv[1]; dt=datetime.datetime.fromisoformat(ts.replace("Z","+00:00")) if ts else None; age=(datetime.datetime.now(datetime.timezone.utc)-dt).total_seconds()//3600 if dt else 9999; print(int(age))' "$CREATED_AT")
-              if [ "$AGE_HOURS" -gt 36 ]; then
-                echo "::error::Najnowszy sukces Discovery B jest za stary (${AGE_HOURS}h)"
+
+              if [ "$STATUS" = "completed" ]; then
+                if [ "$CONCLUSION" != "success" ]; then
+                  echo "::error::Najnowszy Discovery B ($RUN_ID) ma conclusion=$CONCLUSION"
+                  exit 1
+                fi
+                break
+              fi
+
+              if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+                echo "::error::Discovery B nie zakonczyl sie sukcesem w limicie 4h oczekiwania"
                 exit 1
               fi
-              break
-            fi
+              echo "Discovery B jeszcze trwa (status=$STATUS), czekam 60s..."
+              sleep 60
+            done
+          fi
 
-            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
-              echo "::error::Discovery B nie zakonczyl sie sukcesem w limicie 4h oczekiwania"
-              exit 1
-            fi
-            echo "Discovery B jeszcze trwa (status=$STATUS), czekam 60s..."
-            sleep 60
-          done
+          AGE_HOURS=$(python3 -c 'import datetime,sys; ts=sys.argv[1]; dt=datetime.datetime.fromisoformat(ts.replace("Z","+00:00")) if ts else None; age=(datetime.datetime.now(datetime.timezone.utc)-dt).total_seconds()//3600 if dt else 9999; print(int(age))' "$CREATED_AT")
+          if [ "$AGE_HOURS" -gt 36 ]; then
+            echo "::error::Najnowszy sukces Discovery B jest za stary (${AGE_HOURS}h)"
+            exit 1
+          fi
 
           echo "Discovery B run_id=$RUN_ID"
           rm -f predykcje_2026.xlsx
