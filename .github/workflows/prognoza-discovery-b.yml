@@ -1,8 +1,8 @@
-name: Prognoza Discovery A
+name: Prognoza Discovery B
 
 on:
   schedule:
-    - cron: "0 18 * * 0"
+    - cron: "0 2 * * 1"
       timezone: "Europe/Warsaw"
   workflow_dispatch:
 
@@ -11,11 +11,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: prognoza-discovery-a-${{ github.ref }}
+  group: prognoza-discovery-b-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  discovery-a:
+  discovery-b:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
@@ -54,8 +54,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          for WORKFLOW in prognoza-pipeline-send.yml prognoza-discovery-b.yml; do
-            for RUN_ID in $(gh run list --workflow "$WORKFLOW" --status success --limit 4 --json databaseId --jq '.[].databaseId'); do
+          for WORKFLOW in prognoza-discovery-b.yml prognoza-pipeline-send.yml; do
+            for RUN_ID in $(gh run list --workflow "$WORKFLOW" --status success --limit 6 --json databaseId --jq '.[].databaseId'); do
               DEST="artifacts/run-${RUN_ID}"
               mkdir -p "$DEST"
               if gh run download "$RUN_ID" --name predykcje-xlsx --dir "$DEST" 2>/dev/null; then
@@ -69,12 +69,25 @@ jobs:
           done
           ls -la artifacts || true
 
-      - name: Discovery A (soft 4h limit)
+      - name: Discovery B (2x2h, stopniowe luzowanie)
         working-directory: prognoza-meczy
         run: |
           set -euo pipefail
-          timeout --foreground --signal=TERM --kill-after=300 4h \
-            python predykcje.py --fill-missing --refresh-upcoming --fill-days 7
+          run_phase () {
+            local label="$1"
+            shift
+            echo "=== ${label} ==="
+            timeout --foreground --signal=TERM --kill-after=120 2h python predykcje.py "$@"
+          }
+
+          set +e
+          run_phase "B1: fresh window" --fill-missing --refresh-upcoming --fill-days 7
+          PHASE1_CODE=$?
+          set -e
+          if [ "$PHASE1_CODE" -ne 0 ]; then
+            echo "::warning::B1 zakonczyl sie kodem ${PHASE1_CODE}; uruchamiam B2 z szerszym zakresem."
+          fi
+          run_phase "B2: deep backlog" --fill-missing --no-upcoming --fill-days 30
 
       - name: Artifact Excel
         if: always()

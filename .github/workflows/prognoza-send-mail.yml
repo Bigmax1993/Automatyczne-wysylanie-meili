@@ -1,0 +1,96 @@
+name: Prognoza Wysylka
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+      timezone: "Europe/Warsaw"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prognoza-send-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      PYTHONIOENCODING: utf-8
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout prognoza-meczy
+        uses: actions/checkout@v4
+        with:
+          repository: Bigmax1993/prognoza-meczy
+          path: prognoza-meczy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Pobierz najnowszy artifact z Discovery B
+        working-directory: prognoza-meczy
+        run: |
+          set -euo pipefail
+          for v in GMAIL_USER GMAIL_APP_PASSWORD MAIL_TO; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Brak sekretu $v w repo Automatyczne-wysylanie-meili (Settings → Secrets)."
+              exit 1
+            fi
+          done
+
+          DEADLINE=$(( $(date +%s) + 4*3600 ))
+          RUN_ID=""
+          while true; do
+            RUN_JSON=$(gh run list --workflow prognoza-discovery-b.yml --limit 1 --json databaseId,status,conclusion,createdAt)
+            RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].databaseId // empty')
+            STATUS=$(echo "$RUN_JSON" | jq -r '.[0].status // empty')
+            CONCLUSION=$(echo "$RUN_JSON" | jq -r '.[0].conclusion // empty')
+            CREATED_AT=$(echo "$RUN_JSON" | jq -r '.[0].createdAt // empty')
+
+            if [ -z "$RUN_ID" ]; then
+              echo "::error::Brak runów workflow prognoza-discovery-b.yml"
+              exit 1
+            fi
+
+            if [ "$STATUS" = "completed" ]; then
+              if [ "$CONCLUSION" != "success" ]; then
+                echo "::error::Najnowszy Discovery B ($RUN_ID) ma conclusion=$CONCLUSION"
+                exit 1
+              fi
+              AGE_HOURS=$(python3 -c 'import datetime,sys; ts=sys.argv[1]; dt=datetime.datetime.fromisoformat(ts.replace("Z","+00:00")) if ts else None; age=(datetime.datetime.now(datetime.timezone.utc)-dt).total_seconds()//3600 if dt else 9999; print(int(age))' "$CREATED_AT")
+              if [ "$AGE_HOURS" -gt 36 ]; then
+                echo "::error::Najnowszy sukces Discovery B jest za stary (${AGE_HOURS}h)"
+                exit 1
+              fi
+              break
+            fi
+
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+              echo "::error::Discovery B nie zakonczyl sie sukcesem w limicie 4h oczekiwania"
+              exit 1
+            fi
+            echo "Discovery B jeszcze trwa (status=$STATUS), czekam 60s..."
+            sleep 60
+          done
+
+          echo "Discovery B run_id=$RUN_ID"
+          rm -f predykcje_2026.xlsx
+          mkdir -p artifacts
+          gh run download "$RUN_ID" --name predykcje-xlsx --dir artifacts
+          cp artifacts/predykcje_2026.xlsx predykcje_2026.xlsx
+          test -f predykcje_2026.xlsx
+
+      - name: Wyślij mail (soft 4h limit)
+        working-directory: prognoza-meczy
+        run: |
+          set -euo pipefail
+          timeout --foreground --signal=TERM --kill-after=300 4h \
+            python send_mail.py --plik predykcje_2026.xlsx
