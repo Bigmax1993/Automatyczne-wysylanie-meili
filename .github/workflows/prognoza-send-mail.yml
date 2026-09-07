@@ -46,6 +46,8 @@ jobs:
 
       - name: Pobierz najnowszy artifact z Discovery B
         working-directory: prognoza-meczy
+        env:
+          ACTIONS_REPO: Bigmax1993/Automatyczne-wysylanie-meili
         run: |
           set -euo pipefail
           for v in GMAIL_USER GMAIL_APP_PASSWORD MAIL_TO; do
@@ -62,7 +64,7 @@ jobs:
           else
             DEADLINE=$(( $(date +%s) + 4*3600 ))
             while true; do
-              RUN_JSON=$(gh run list --workflow prognoza-discovery-b.yml --limit 1 --json databaseId,status,conclusion,createdAt)
+              RUN_JSON=$(gh run list -R "$ACTIONS_REPO" --workflow prognoza-discovery-b.yml --limit 1 --json databaseId,status,conclusion,createdAt)
               RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].databaseId // empty')
               STATUS=$(echo "$RUN_JSON" | jq -r '.[0].status // empty')
               CONCLUSION=$(echo "$RUN_JSON" | jq -r '.[0].conclusion // empty')
@@ -99,7 +101,7 @@ jobs:
           echo "Discovery B run_id=$RUN_ID"
           rm -f predykcje_2026.xlsx
           mkdir -p artifacts
-          gh run download "$RUN_ID" --name predykcje-xlsx --dir artifacts
+          gh run download -R "$ACTIONS_REPO" "$RUN_ID" --name predykcje-xlsx --dir artifacts
           cp artifacts/predykcje_2026.xlsx predykcje_2026.xlsx
           test -f predykcje_2026.xlsx
 

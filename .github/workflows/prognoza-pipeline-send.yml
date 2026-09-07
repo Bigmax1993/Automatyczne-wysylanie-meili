@@ -51,14 +51,16 @@ jobs:
 
       - name: Pobierz poprzednie artefakty predykcji
         working-directory: prognoza-meczy
+        env:
+          ACTIONS_REPO: Bigmax1993/Automatyczne-wysylanie-meili
         run: |
           set -euo pipefail
           mkdir -p artifacts
           for WORKFLOW in prognoza-pipeline-send.yml prognoza-discovery-b.yml; do
-            for RUN_ID in $(gh run list --workflow "$WORKFLOW" --status success --limit 4 --json databaseId --jq '.[].databaseId'); do
+            for RUN_ID in $(gh run list -R "$ACTIONS_REPO" --workflow "$WORKFLOW" --status success --limit 4 --json databaseId --jq '.[].databaseId'); do
               DEST="artifacts/run-${RUN_ID}"
               mkdir -p "$DEST"
-              if gh run download "$RUN_ID" --name predykcje-xlsx --dir "$DEST" 2>/dev/null; then
+              if gh run download -R "$ACTIONS_REPO" "$RUN_ID" --name predykcje-xlsx --dir "$DEST" 2>/dev/null; then
                 cp "$DEST/predykcje_2026.xlsx" "artifacts/predykcje_prev_${RUN_ID}.xlsx"
                 if [ ! -f artifacts/previous_predykcje_2026.xlsx ]; then
                   cp "$DEST/predykcje_2026.xlsx" artifacts/previous_predykcje_2026.xlsx
