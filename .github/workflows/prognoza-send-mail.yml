@@ -33,10 +33,10 @@ jobs:
     timeout-minutes: 300
     env:
       PYTHONIOENCODING: utf-8
-      GMAIL_USER: ${{ secrets.GMAIL_USER }}
-      GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
-      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      MAIL_TO: ${{ secrets.MAIL_TO }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER || vars.GMAIL_USER }}
+      GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL || vars.GMAIL_SENDER_EMAIL }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD || vars.GMAIL_APP_PASSWORD }}
+      MAIL_TO: ${{ secrets.MAIL_TO || vars.MAIL_TO || secrets.GMAIL_RECIPIENT_EMAIL || vars.GMAIL_RECIPIENT_EMAIL }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout prognoza-meczy

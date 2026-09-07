@@ -20,8 +20,8 @@ jobs:
     timeout-minutes: 300
     env:
       PYTHONIOENCODING: utf-8
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || vars.ANTHROPIC_API_KEY }}
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY || vars.SERPER_API_KEY }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
