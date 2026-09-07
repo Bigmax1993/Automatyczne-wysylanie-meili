@@ -1,6 +1,10 @@
 name: Prognoza Wysylka
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/prognoza-send-mail.yml"
   workflow_run:
     workflows: ["Prognoza Discovery B"]
     types: [completed]
@@ -30,6 +34,7 @@ jobs:
     env:
       PYTHONIOENCODING: utf-8
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       MAIL_TO: ${{ secrets.MAIL_TO }}
       GH_TOKEN: ${{ github.token }}
@@ -50,12 +55,22 @@ jobs:
           ACTIONS_REPO: Bigmax1993/Automatyczne-wysylanie-meili
         run: |
           set -euo pipefail
-          for v in GMAIL_USER GMAIL_APP_PASSWORD MAIL_TO; do
-            if [ -z "${!v:-}" ]; then
-              echo "::error::Brak sekretu $v w repo Automatyczne-wysylanie-meili (Settings → Secrets)."
-              exit 1
-            fi
-          done
+          if [ -z "${GMAIL_USER:-}" ] && [ -n "${GMAIL_SENDER_EMAIL:-}" ]; then
+            GMAIL_USER="$GMAIL_SENDER_EMAIL"
+            echo "::warning::Brak GMAIL_USER - używam GMAIL_SENDER_EMAIL."
+          fi
+          if [ -z "${MAIL_TO:-}" ] && [ -n "${GMAIL_USER:-}" ]; then
+            MAIL_TO="$GMAIL_USER"
+            echo "::warning::Brak MAIL_TO - wysylam kopie na adres nadawcy."
+          fi
+          if [ -z "${GMAIL_USER:-}" ] || [ -z "${GMAIL_APP_PASSWORD:-}" ] || [ -z "${MAIL_TO:-}" ]; then
+            echo "::error::Brak sekretow maila (GMAIL_USER/GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD, MAIL_TO)."
+            exit 1
+          fi
+          {
+            echo "GMAIL_USER=$GMAIL_USER"
+            echo "MAIL_TO=$MAIL_TO"
+          } >> "$GITHUB_ENV"
 
           RUN_ID=""
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
