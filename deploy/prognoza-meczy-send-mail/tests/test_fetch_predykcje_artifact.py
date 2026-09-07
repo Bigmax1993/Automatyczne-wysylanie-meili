@@ -42,7 +42,7 @@ def test_find_latest_successful_run_rejects_stale_runs():
                 token="tok",
                 workflow="pipeline.yml",
                 branch="main",
-                max_age_days=8,
+                max_age_days=3,
             )
 
 
@@ -58,7 +58,7 @@ def test_find_latest_successful_run_picks_recent():
             token="tok",
             workflow="pipeline.yml",
             branch="main",
-            max_age_days=8,
+            max_age_days=3,
         )
     assert picked["id"] == 99
 

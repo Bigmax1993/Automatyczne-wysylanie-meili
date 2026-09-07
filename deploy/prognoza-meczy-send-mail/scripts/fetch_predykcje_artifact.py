@@ -124,7 +124,7 @@ def fetch_predykcje_xlsx(
     artifact_name: str = DEFAULT_ARTIFACT,
     output_name: str = DEFAULT_OUTPUT,
     dest: Path,
-    max_age_days: int = 8,
+    max_age_days: int = 3,
 ) -> dict[str, str | int]:
     run = find_latest_successful_run(
         repo=repo,
@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--artifact", default=DEFAULT_ARTIFACT)
     parser.add_argument("--output-name", default=DEFAULT_OUTPUT)
     parser.add_argument("--dest", type=Path, default=Path(DEFAULT_OUTPUT))
-    parser.add_argument("--max-age-days", type=int, default=8)
+    parser.add_argument("--max-age-days", type=int, default=3)
     parser.add_argument(
         "--fallback",
         type=Path,

@@ -1,10 +1,10 @@
-# Poniedziałek 02:00 czasu polskiego (CEST = UTC+2). Zimą (CET) będzie 03:00.
+# Poniedziałek 03:00 czasu polskiego (CEST = UTC+2). Zimą (CET) będzie 02:00.
 # GitHub Actions cron jest zawsze w UTC.
 name: Wysyłka Gmail poniedziałek
 
 on:
   schedule:
-    - cron: "0 0 * * 1"
+    - cron: "0 1 * * 1"
   workflow_dispatch:
     inputs:
       allow_repo_fallback:
@@ -41,6 +41,7 @@ jobs:
             --repo "${{ github.repository }}"
             --branch main
             --dest predykcje_2026.xlsx
+            --max-age-days 3
           )
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.allow_repo_fallback }}" = "true" ]; then
             ARGS+=(--fallback predykcje_2026.xlsx)
