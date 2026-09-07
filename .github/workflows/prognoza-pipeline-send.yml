@@ -17,6 +17,7 @@ concurrency:
 jobs:
   discovery-a:
     runs-on: ubuntu-latest
+    environment: github-pages
     timeout-minutes: 300
     env:
       PYTHONIOENCODING: utf-8
