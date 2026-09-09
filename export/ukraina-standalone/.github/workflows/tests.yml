@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Compile core modules
+        run: |
+          python -m py_compile kanbud_bootstrap.py
+          python -m py_compile campaign_data_paths.py
+          python -m py_compile ua_materialy_scraper.py
+          python -m py_compile ua_oblast_keywords.py
+          python -m py_compile ua_materialy_inquiry_email_uk.py
+
+      - name: Scraper smoke UA materialy (--test)
+        run: python ua_materialy_scraper.py --test
+
+      - name: Regresja i testy UA (pytest + unittest)
+        run: |
+          python -m unittest tests.test_ua_materialy_regression -v
+          python -m pytest \
+            tests/test_ua_oblast_keywords.py \
+            tests/test_ua_inquiry_email_uk.py \
+            tests/test_ua_claude_inquiry_email.py \
+            tests/test_ua_supplier_filter.py \
+            tests/test_ua_materialy_integration.py \
+            -q

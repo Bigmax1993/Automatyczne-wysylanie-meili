@@ -1,0 +1,154 @@
+name: UA discovery
+
+# Kampania UA — harmonogram jak DE GU (pon-pt discovery)
+on:
+  schedule:
+    - cron: "0 17 * * 1"
+      timezone: Europe/Warsaw
+    - cron: "0 15 * * 2"
+      timezone: Europe/Warsaw
+    - cron: "0 19 * * 3"
+      timezone: Europe/Warsaw
+    - cron: "0 20 * * 4"
+      timezone: Europe/Warsaw
+    - cron: "0 16 * * 5"
+      timezone: Europe/Warsaw
+  workflow_dispatch:
+    inputs:
+      discovery_phase:
+        description: "Etap discovery: auto (dzien PL) | mon | tue | wed | thu | fri"
+        required: false
+        type: choice
+        options:
+          - auto
+          - mon
+          - tue
+          - wed
+          - thu
+          - fri
+        default: auto
+      resume_artifact_run_id:
+        description: "Wznow z konkretnego run ID (ua-materialy-wyniki-pi). Puste = wg fazy."
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ua-pipeline
+  cancel-in-progress: false
+
+env:
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  DISABLE_SEND_WINDOW: "1"
+  SERPER_DAILY_LIMIT: "1000"
+  CLAUDE_UNLIMITED: "1"
+  SCRAPER_MAX_RUNTIME_SECONDS: "14400"
+  KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 310
+    env:
+      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-scraper
+
+      - name: Resolve artifact run (poniedzialek-piatek)
+        id: prev_run
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RESUME_INPUT="${{ github.event_name == 'workflow_dispatch' && inputs.resume_artifact_run_id || '' }}"
+          if [ -n "$RESUME_INPUT" ]; then
+            echo "run-id=$RESUME_INPUT" >> "$GITHUB_OUTPUT"
+            echo "artifact-name=ua-materialy-wyniki-pi" >> "$GITHUB_OUTPUT"
+            echo "resume=1" >> "$GITHUB_OUTPUT"
+            echo "phase=manual" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PHASE="${{ github.event_name == 'workflow_dispatch' && inputs.discovery_phase || 'auto' }}"
+          if [ "$PHASE" = "auto" ]; then
+            DOW=$(TZ=Europe/Warsaw date +%u)
+            case "$DOW" in
+              1) PHASE=mon ;;
+              2) PHASE=tue ;;
+              3) PHASE=wed ;;
+              4) PHASE=thu ;;
+              5) PHASE=fri ;;
+              *) PHASE=thu ;;
+            esac
+          fi
+          echo "phase=$PHASE" >> "$GITHUB_OUTPUT"
+
+          if [ "$PHASE" = "mon" ]; then
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.name=="ua-materialy-wyniki-fri" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+              echo "artifact-name=ua-materialy-wyniki-fri" >> "$GITHUB_OUTPUT"
+              echo "resume=0" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.name=="ua-materialy-wyniki-pi" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')
+            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+              echo "::error::Brak ua-materialy-wyniki-pi — uruchom najpierw poniedzialek discovery (faza mon)"
+              exit 1
+            fi
+            echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+            echo "artifact-name=ua-materialy-wyniki-pi" >> "$GITHUB_OUTPUT"
+            echo "resume=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download previous Wyniki (kumulacja cache + Excel)
+        if: steps.prev_run.outputs.run-id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.prev_run.outputs.artifact-name || 'ua-materialy-wyniki-fri' }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.prev_run.outputs.run-id }}
+          path: .
+
+      - name: Discovery (serper-only, pon-pt)
+        run: |
+          ARGS="--run-config run_config/ua_materialy.json --serper-only-discovery --no-auto-email --rotate-oblast"
+          if [ "${{ steps.prev_run.outputs.resume }}" = "1" ]; then
+            ARGS="$ARGS --respect-cache"
+          fi
+          python ua_materialy_scraper.py $ARGS
+
+      - name: Upload Wyniki artifact (discovery)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-materialy-wyniki-pi
+          path: |
+            Wyniki/
+            wyslane/
+
+      - name: Chain — niedziela backfill (piatek)
+        if: success() && steps.prev_run.outputs.phase == 'fri'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/gha_chain_workflow.sh "UA niedziela backfill" \
+            "artifact_run_id=${{ github.run_id }}"
+
+      - name: Wznow po timeout
+        if: cancelled() && steps.prev_run.outputs.phase != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PHASE="${{ steps.prev_run.outputs.phase }}"
+          gh workflow run ua_materialy_pi.yml -R "$GITHUB_REPOSITORY" \
+            -f discovery_phase="$PHASE" \
+            -f resume_artifact_run_id="${{ github.run_id }}"

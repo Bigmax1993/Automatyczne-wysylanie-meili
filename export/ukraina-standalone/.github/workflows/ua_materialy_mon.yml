@@ -1,0 +1,73 @@
+name: UA poniedzialek prep
+
+# Kampania UA — prep poniedzialek
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+      timezone: Europe/Warsaw
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ua-pipeline
+  cancel-in-progress: false
+
+env:
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  SERPER_DAILY_LIMIT: "1000"
+  CLAUDE_UNLIMITED: "1"
+  KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+
+jobs:
+  prep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-scraper
+
+      - name: Resolve artifact run (niedziela)
+        id: artifact_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name=="ua-materialy-wyniki-thu" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Brak artefaktu ua-materialy-wyniki-thu"
+            exit 1
+          fi
+          echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download cache from niedziela
+        uses: actions/download-artifact@v4
+        with:
+          name: ua-materialy-wyniki-thu
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifact_run.outputs.run-id }}
+          path: .
+
+      - name: Prep (rebuild Excel, bez wysylki)
+        run: |
+          python ua_materialy_scraper.py --run-config run_config/ua_materialy.json --rebuild-from-cache
+
+      - name: Upload Wyniki artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-materialy-wyniki-mon
+          path: |
+            Wyniki/
+            wyslane/
+
+      - name: Chain — poniedzialek send
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/gha_chain_workflow.sh "UA poniedzialek send"

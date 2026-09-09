@@ -1,0 +1,126 @@
+name: Sync wyniki Google Drive UA
+
+# Kampania UA — sync Drive poniedzialek
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_name:
+        description: "Opcjonalnie wymus artefakt (np. ua-materialy-wyniki-thu)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 6 * * 1"
+      timezone: Europe/Warsaw
+
+permissions:
+  actions: write
+  contents: read
+
+env:
+  GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID_UA }}
+  GDRIVE_VERSION_XLSX: "1"
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt -r requirements-drive.txt
+
+      - name: Resolve artifact (thu → mon → tue → fri)
+        id: artifact_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FORCED="${{ github.event.inputs.artifact_name }}"
+          ALL=$(gh api "repos/${{ github.repository }}/actions/artifacts" \
+            --paginate --jq '.artifacts[] | select(.expired==false)')
+          pick_latest() {
+            local name="$1"
+            echo "$ALL" | jq -s --arg n "$name" \
+              '[.[] | select(.name == $n)] | sort_by(.created_at) | reverse | .[0] // empty'
+          }
+          PICK=""
+          if [ -n "$FORCED" ]; then
+            PICK=$(pick_latest "$FORCED")
+          else
+            for NAME in ua-materialy-wyniki-thu ua-materialy-wyniki-mon ua-materialy-wyniki-tue ua-materialy-wyniki-fri; do
+              CAND=$(pick_latest "$NAME")
+              if [ -n "$CAND" ] && [ "$CAND" != "null" ]; then
+                PICK="$CAND"
+                break
+              fi
+            done
+          fi
+          if [ -z "$PICK" ] || [ "$PICK" = "null" ]; then
+            echo "artifact=" >> "$GITHUB_OUTPUT"
+            echo "run-id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "artifact=$(echo "$PICK" | jq -r '.name')" >> "$GITHUB_OUTPUT"
+          echo "run-id=$(echo "$PICK" | jq -r '.workflow_run.id')" >> "$GITHUB_OUTPUT"
+
+      - name: Download pipeline artifact
+        if: steps.artifact_run.outputs.run-id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.artifact_run.outputs.artifact }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifact_run.outputs.run-id }}
+          path: .
+
+      - name: Validate GDRIVE credentials
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.GDRIVE_OAUTH_REFRESH_TOKEN }}
+          GDRIVE_OAUTH_CLIENT_ID: ${{ secrets.GDRIVE_OAUTH_CLIENT_ID }}
+          GDRIVE_OAUTH_CLIENT_SECRET: ${{ secrets.GDRIVE_OAUTH_CLIENT_SECRET }}
+        run: |
+          python -c "
+          import os, json, sys
+          if not (os.environ.get('GDRIVE_FOLDER_ID') or '').strip():
+              print('::warning::GDRIVE_FOLDER_ID_UA nie ustawione — upload moze nie dzialac')
+          refresh = (os.environ.get('GDRIVE_OAUTH_REFRESH_TOKEN') or '').strip()
+          cid = (os.environ.get('GDRIVE_OAUTH_CLIENT_ID') or '').strip()
+          csec = (os.environ.get('GDRIVE_OAUTH_CLIENT_SECRET') or '').strip()
+          if refresh and cid and csec:
+              print('OK: OAuth (upload na Moj dysk)')
+              sys.exit(0)
+          raw = (os.environ.get('GDRIVE_SERVICE_ACCOUNT_JSON') or '').strip()
+          if not raw:
+              print('BLAD: Ustaw OAuth (GDRIVE_OAUTH_*) LUB konto uslugowego + Shared Drive')
+              sys.exit(1)
+          if raw.startswith('AIza'):
+              print('BLAD: GDRIVE_SERVICE_ACCOUNT_JSON to klucz API, nie JSON konta uslugowego')
+              sys.exit(1)
+          j = json.loads(raw)
+          if j.get('type') != 'service_account':
+              print('BLAD: niepoprawny JSON konta uslugowego')
+              sys.exit(1)
+          print('OK:', j.get('client_email'))
+          "
+
+      - name: Upload Wyniki to Google Drive
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_OAUTH_CLIENT_ID: ${{ secrets.GDRIVE_OAUTH_CLIENT_ID }}
+          GDRIVE_OAUTH_CLIENT_SECRET: ${{ secrets.GDRIVE_OAUTH_CLIENT_SECRET }}
+          GDRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.GDRIVE_OAUTH_REFRESH_TOKEN }}
+          GDRIVE_IMPERSONATE_EMAIL: ${{ secrets.GDRIVE_IMPERSONATE_EMAIL }}
+          GDRIVE_SHARED_DRIVE_ID: ${{ secrets.GDRIVE_SHARED_DRIVE_ID }}
+        run: |
+          mkdir -p Wyniki wyslane 2>/dev/null || true
+          python scripts/gdrive_upload_wyniki.py --campaign-dir . --campaign ua
+
+      - name: Chain — poniedzialek prep
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/gha_chain_workflow.sh "UA poniedzialek prep"

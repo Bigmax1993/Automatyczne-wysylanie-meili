@@ -1,0 +1,106 @@
+name: UA poniedzialek send
+
+# Kampania UA — wysylka poniedzialek
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+      timezone: Europe/Warsaw
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: "Opcjonalnie run ID zrodla (domyslnie mon)."
+        required: false
+        type: string
+      artifact_name:
+        description: "Nazwa artefaktu zrodla (domyslnie ua-materialy-wyniki-mon)"
+        required: false
+        type: string
+        default: "ua-materialy-wyniki-mon"
+      force_resend:
+        description: Ponowna wysylka
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ua-pipeline
+  cancel-in-progress: false
+
+env:
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  DISABLE_SEND_WINDOW: "1"
+  KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+  SMTP_HOST: ragakomputer.home.pl
+  SMTP_PORT: "465"
+  SMTP_SSL: "1"
+  IMAP_HOST: ragakomputer.home.pl
+  IMAP_PORT: "993"
+  IMAP_SSL: "1"
+  MAIL_ARCHIVE_IMAP: "1"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-scraper
+
+      - name: Resolve artifact run
+        id: artifact_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FORCED="${{ github.event_name == 'workflow_dispatch' && inputs.artifact_run_id || '' }}"
+          ARTIFACT="${{ github.event_name == 'workflow_dispatch' && inputs.artifact_name || 'ua-materialy-wyniki-mon' }}"
+          if [ -n "$FORCED" ]; then
+            RUN_ID="$FORCED"
+          else
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.name=="ua-materialy-wyniki-mon" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')
+          fi
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::Brak artefaktu ua-materialy-wyniki-mon"
+            exit 1
+          fi
+          echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+
+      - name: Download cache
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.artifact_run.outputs.artifact || 'ua-materialy-wyniki-mon' }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifact_run.outputs.run-id }}
+          path: .
+
+      - name: Send emails partia 1 (do 300/dzien)
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_SENDER_NAME: ${{ secrets.MAIL_SENDER_NAME }}
+        run: |
+          ARGS="--run-config run_config/ua_materialy.json --send-emails-only --ignore-send-window"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_resend }}" = "true" ]; then
+            ARGS="$ARGS --force-resend"
+          fi
+          python ua_materialy_scraper.py $ARGS
+
+      - name: Upload Wyniki artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-materialy-wyniki-tue
+          path: |
+            Wyniki/
+            wyslane/
+
+      - name: Chain — wtorek send
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/gha_chain_workflow.sh "UA wtorek send"

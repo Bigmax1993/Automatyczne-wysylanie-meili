@@ -1,0 +1,84 @@
+name: UA wtorek send
+
+# Kampania UA — wysylka wtorek
+on:
+  schedule:
+    - cron: "0 9 * * 2"
+      timezone: Europe/Warsaw
+  workflow_dispatch:
+    inputs:
+      force_resend:
+        description: Ponowna wysylka
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ua-pipeline
+  cancel-in-progress: false
+
+env:
+  SCRAPER_TIMEZONE: Europe/Warsaw
+  DISABLE_SEND_WINDOW: "1"
+  KANBUD_PROJECT_ROOT: ${{ github.workspace }}/libs
+  SMTP_HOST: ragakomputer.home.pl
+  SMTP_PORT: "465"
+  SMTP_SSL: "1"
+  IMAP_HOST: ragakomputer.home.pl
+  IMAP_PORT: "993"
+  IMAP_SSL: "1"
+  MAIL_ARCHIVE_IMAP: "1"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-scraper
+
+      - name: Resolve artifact run (poniedzialek send)
+        id: artifact_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name=="ua-materialy-wyniki-tue" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Brak artefaktu ua-materialy-wyniki-tue"
+            exit 1
+          fi
+          echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download cache
+        uses: actions/download-artifact@v4
+        with:
+          name: ua-materialy-wyniki-tue
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.artifact_run.outputs.run-id }}
+          path: .
+
+      - name: Send emails partia 2 (do 300/dzien)
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_SENDER_NAME: ${{ secrets.MAIL_SENDER_NAME }}
+        run: |
+          ARGS="--run-config run_config/ua_materialy.json --send-emails-only --ignore-send-window"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_resend }}" = "true" ]; then
+            ARGS="$ARGS --force-resend"
+          fi
+          python ua_materialy_scraper.py $ARGS
+
+      - name: Upload Wyniki artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-materialy-wyniki-fri
+          path: |
+            Wyniki/
+            wyslane/
