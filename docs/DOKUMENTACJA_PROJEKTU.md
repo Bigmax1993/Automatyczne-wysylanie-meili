@@ -29,6 +29,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 | `pipeline_version.py` | Wersja zestawu (czyta plik `VERSION`) |
 | `pipeline_launcher_gui.py` | Opcjonalne GUI (Tkinter): uruchamianie `run_with_env.ps1`, podgląd wyjścia, foldery |
 | `sent_mail_registry.py` | Rejestr wysłanych maili (JSONL na partię) pod follow-up; retencja plików (domyślnie 14 dni od ostatniego `sent_at`); `follow_up_mail.py` — lista / eksport / `mark-reply` |
+| `search_straty_osoby.py` | Kwerenda konkretnej osoby w publicznej bazie IPN Straty (`straty.pl/szukaj-osoby.php`); **nie** jest źródłem leadów ani częścią wysyłki |
 
 ### Skrypty PowerShell
 
@@ -69,6 +70,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 - Portale pracy służą do nazw firm / agencji.
 - Strona WWW i kontakt są doprecyzowywane osobno.
 - Przy podejrzeniu CAPTCHA / blokady stosowany jest bezpieczny fallback (bez obchodzenia zabezpieczeń).
+- **IPN Straty** (`search_straty_osoby.py`) to osobna kwerenda genealogiczna/historyczna po publicznej wyszukiwarce osób represjonowanych. Wyników **nie** wolno wrzucać do pipeline'u mailingowego.
 
 ## 6. Konfiguracja (zmienne środowiskowe)
 
@@ -160,7 +162,18 @@ Tylko raport offline (bez OpenAI / SMTP):
 python clean_validate_send_pipeline.py --validate-only --input "ścieżka\plik.csv"
 ```
 
-### 7.5. Kontynuacja od wyczyszczonego CSV
+### 7.5. Wyszukiwanie osoby w IPN Straty
+
+Publiczny formularz [straty.pl/szukaj-osoby.php](https://straty.pl/szukaj-osoby.php) (ofiary i osoby represjonowane 1939–1945). Wymaga nazwiska; przy zbyt szerokim zapytaniu baza zwraca „Za dużo wyników”.
+
+```powershell
+python search_straty_osoby.py --nazwisko "Nazwisko" --imie "Imie" --ur-rok 1920 --imie-ojca "Jan"
+python search_straty_osoby.py --nazwisko "Nazwisko" --imie "Imie" --details --output "$env:USERPROFILE\Documents\straty_osoba.json"
+```
+
+Kody wyjścia: `0` wyniki, `1` brak rekordów, `2` błąd walidacji/HTTP, `3` za dużo wyników / brak kryteriów.
+
+### 7.6. Kontynuacja od wyczyszczonego CSV
 
 ```powershell
 python clean_validate_send_pipeline.py --skip-clean --input "ścieżka\Kontakty_cleaned.csv" --skip-extra-contacts

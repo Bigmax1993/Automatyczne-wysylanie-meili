@@ -76,6 +76,7 @@ Pełna lista i opisy: **`env.example`**.
 python contact_mailer.py
 python clean_validate_send_pipeline.py --input "ścieżka\plik.xlsx" --output-csv "ścieżka\out.csv"
 python build_contacts_serpapi.py --help
+python search_straty_osoby.py --nazwisko "Nazwisko" --imie "Imie"
 ```
 
 Przed ręcznym wywołaniem ustaw zmienne (`$env:...` lub `. .\local_env.ps1`).
@@ -112,6 +113,17 @@ Szukane są m.in. wzorce `CV*.pdf` w `Documents` oraz w podfolderach **`CV`**, `
 ## SerpAPI (zbiór leadów)
 
 `build_contacts_serpapi.py` — wymaga `SERPAPI_API_KEY`. Przy braku klucza lub limicie dziennej zwraca kod `2`; pipeline może użyć istniejącego Excela lub folderu `kontakty`.
+
+## Wyszukiwanie osoby (IPN Straty)
+
+`search_straty_osoby.py` woła publiczny formularz [straty.pl/szukaj-osoby.php](https://straty.pl/szukaj-osoby.php) (baza ofiar i osób represjonowanych 1939–1945). To **kwerenda genealogiczna / historyczna**, nie zbieranie leadów — wyniki nie idą do Gmaila.
+
+```powershell
+python search_straty_osoby.py --nazwisko "Kowalski" --imie "Jan" --ur-rok 1920 --imie-ojca "Stanislaw"
+python search_straty_osoby.py --nazwisko "Kowalski" --imie "Jan" --details --json --output "$env:USERPROFILE\Documents\straty.json"
+```
+
+Zbyt szerokie nazwisko (np. samo „Kowalski”) kończy się komunikatem bazy „Za dużo wyników — uściślij kryteria”. `--details` pobiera kartę (represje, źródło) z twardym limitem rekordów.
 
 ## Testy
 

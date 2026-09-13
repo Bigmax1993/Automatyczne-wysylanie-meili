@@ -9,5 +9,6 @@ To narzędzie techniczne: **Ty odpowiadasz** za legalność wysyłki (RODO, praw
 - **Logi i kopie zapasowe** (`pipeline_logs`, log kampanii CSV, opcjonalne kopie JSON) mogą przechowywać adresy e-mail, nazwy firm i fragmenty treści — stosuj odpowiednie środki techniczne i organizacyjne (dostęp, retencja, RODO).
 - W CI (`GitHub Actions`) artefakty `pipeline-json-backup-*` oraz `pipeline-logs-*` są przechowywane czasowo (retencja 30 dni) — traktuj je jako dane operacyjne z możliwymi danymi osobowymi.
 - **GUI** (`pipeline_launcher_gui.py`) wyświetla wyjście procesu w oknie — unikaj udostępniania ekranu, gdy w logu widać dane wrażliwe; sekrety trzymaj w `local_env.ps1` / profilu systemu, nie w repozytorium.
+- **IPN Straty** (`search_straty_osoby.py`) odczytuje wyłącznie publiczny formularz wyszukiwania konkretnej osoby. Nie obchodzi logowania ani blokad, nie zrzuca całej bazy i **nie** zasila wysyłki e-mail. Dane ofiar i osób represjonowanych to dane osobowe — przechowuj wyniki lokalnie, zgodnie z RODO i celem kwerendy (genealogia / historia / kontakt z IPN).
 
 W razie wątpliwości skonsultuj się z prawnikiem lub działem HR.
