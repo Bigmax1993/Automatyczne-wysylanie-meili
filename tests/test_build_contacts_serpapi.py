@@ -64,6 +64,7 @@ def test_record_key_uses_domain_or_name() -> None:
 def test_is_job_portal_domain_detects_portals() -> None:
     assert serp._is_job_portal_domain("https://pracuj.pl/oferta/123")
     assert serp._is_job_portal_domain("justjoin.it")
+    assert serp._is_job_portal_domain("https://www.olx.pl/oferta/praca/x")
     assert not serp._is_job_portal_domain("example.com")
 
 
