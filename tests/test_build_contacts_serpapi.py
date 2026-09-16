@@ -64,7 +64,23 @@ def test_record_key_uses_domain_or_name() -> None:
 def test_is_job_portal_domain_detects_portals() -> None:
     assert serp._is_job_portal_domain("https://pracuj.pl/oferta/123")
     assert serp._is_job_portal_domain("justjoin.it")
+    assert serp._is_job_portal_domain(
+        "https://www.olx.pl/oferta/praca/pracownik-biurowy-ze-znajomoscia-jez-niemieckiego-CID4-ID1c8lEt.html"
+    )
     assert not serp._is_job_portal_domain("example.com")
+
+
+def test_extract_organic_clears_olx_listing_website() -> None:
+    row = serp._extract_organic(
+        {
+            "title": "Pracownik biurowy ze znajomością jęz. niemieckiego - OLX",
+            "link": "https://www.olx.pl/oferta/praca/pracownik-biurowy-CID4-ID1c8lEt.html",
+        },
+        category="Biuro",
+        query="test",
+        city="Wroclaw",
+    )
+    assert row["Strona WWW"] == ""
 
 
 def test_extract_organic_clears_portal_website() -> None:

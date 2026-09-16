@@ -104,6 +104,7 @@ JOB_PORTAL_DOMAINS = (
     "theprotocol.it",
     "bulldogjob.pl",
     "gowork.pl",
+    "olx.pl",
 )
 CAPTCHA_HINTS = (
     "captcha",
