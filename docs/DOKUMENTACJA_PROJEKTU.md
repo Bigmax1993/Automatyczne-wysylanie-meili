@@ -18,7 +18,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 | Plik | Rola |
 |------|------|
 | `build_contacts_serpapi.py` | Zbiór leadów z SerpAPI, enrichment e-mail ze stron |
-| `import_job_listing.py` | Import publicznego ogłoszenia (OLX JSON-LD / HTML) do arkusza kontaktów |
+| `import_job_listing.py` | Import publicznego ogłoszenia (OLX / Pracuj.pl, JSON-LD / HTML) do arkusza kontaktów |
 | `clean_validate_send_pipeline.py` | Pipeline: czyszczenie OpenAI → walidacja → CSV → wysyłka |
 | `contact_mailer.py` | Rdzeń wysyłki (retry, limity, personalizacja, statusy, CV, SMTP Gmail) |
 | `excel_workbook_reader.py` | Wczytywanie wieloarkuszowych raportów Excel (nagłówki, pomijane arkusze) |
@@ -40,7 +40,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 
 ### Konfiguracja i dokumentacja
 
-- `VERSION` — wersja pipeline (np. `1.1.0`).
+- `VERSION` — wersja pipeline (np. `1.2.0`).
 - `env.example` — opis zmiennych środowiskowych (kopiuj do `.env` lub `local_env.ps1`).
 - `config/blocked_domains.txt` — domeny do wykluczenia z wysyłki.
 - `requirements.txt` — zależności Python.
@@ -67,8 +67,8 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 
 ## 5. Źródła danych i strategia pozyskania
 
-- Portale pracy służą do nazw firm / agencji (`olx.pl` jest na liście portali — URL ogłoszenia nie trafia do kolumny Strona WWW).
-- Pojedyncze ogłoszenie (np. OLX) można zaimportować przez **`import_job_listing.py`**: JSON-LD `JobPosting` + fallback HTML, potem ewentualnie e-mail ze strony firmy.
+- Portale pracy służą do nazw firm / agencji (`olx.pl`, `pracuj.pl` są na liście portali — URL ogłoszenia nie trafia do kolumny Strona WWW).
+- Pojedyncze ogłoszenie (OLX, Pracuj.pl) można zaimportować przez **`import_job_listing.py`**: JSON-LD `JobPosting` + fallback HTML, potem ewentualnie e-mail ze strony firmy.
 - Strona WWW i kontakt są doprecyzowywane osobno.
 - Przy podejrzeniu CAPTCHA / blokady stosowany jest bezpieczny fallback (bez obchodzenia zabezpieczeń).
 
@@ -168,16 +168,16 @@ python clean_validate_send_pipeline.py --validate-only --input "ścieżka\plik.c
 python clean_validate_send_pipeline.py --skip-clean --input "ścieżka\Kontakty_cleaned.csv" --skip-extra-contacts
 ```
 
-### 7.6. Import ogłoszenia OLX
+### 7.6. Import ogłoszenia OLX / Pracuj.pl
 
 Publiczny HTML oferty (JSON-LD `JobPosting` albo zapisany plik, gdy portal blokuje datacenter):
 
 ```powershell
-python import_job_listing.py --url "https://www.olx.pl/oferta/praca/....html" --output "$env:USERPROFILE\Documents\kontakty\olx_listing.xlsx"
+python import_job_listing.py --url "https://www.pracuj.pl/praca/....,oferta,123" --output "$env:USERPROFILE\Documents\kontakty\pracuj_listing.xlsx"
 python import_job_listing.py --url "https://www.olx.pl/oferta/praca/....html" --html-file ".\oferta.html" --company-website "https://firma.example.pl" --enrich-email --output "$env:USERPROFILE\Documents\kontakty\olx_listing.xlsx"
 ```
 
-Kod wyjścia `2` = blokada HTTP/CAPTCHA (bez obchodzenia WAF). Dalej ten sam pipeline `--input` na zapisanym arkuszu.
+Kod wyjścia `2` = blokada HTTP/CAPTCHA/Cloudflare (bez obchodzenia WAF). Dalej ten sam pipeline `--input` na zapisanym arkuszu.
 
 ## 8. Harmonogram (opcjonalnie)
 

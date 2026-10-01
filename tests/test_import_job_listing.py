@@ -1,4 +1,4 @@
-"""Import ogłoszeń OLX / JSON-LD JobPosting do formatu kontaktów mailera."""
+"""Import ogłoszeń OLX / Pracuj.pl / JSON-LD JobPosting do formatu kontaktów mailera."""
 
 from __future__ import annotations
 
@@ -10,9 +10,13 @@ import build_contacts_serpapi as serp
 import import_job_listing as ijl
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "olx_job_listing.html"
+PRACUJ_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "pracuj_job_listing.html"
 OLX_URL = (
     "https://www.olx.pl/oferta/praca/"
     "pracownik-biurowy-ze-znajomoscia-jez-niemieckiego-CID4-ID1c8lEt.html"
+)
+PRACUJ_URL = (
+    "https://www.pracuj.pl/praca/spedytor-spedytorka-zielona-gora,oferta,1005115616"
 )
 
 
@@ -223,3 +227,85 @@ def test_main_enrich_email_flag(monkeypatch, tmp_path) -> None:
     )
     assert code == 0
     assert "hr@firma.example.pl" in out.read_text(encoding="utf-8-sig")
+
+
+def test_pracuj_listing_url_and_id() -> None:
+    assert ijl.is_pracuj_listing_url(PRACUJ_URL)
+    assert ijl.is_pracuj_listing_url("https://pracuj.pl/praca/x,oferta,1")
+    assert not ijl.is_pracuj_listing_url("https://www.kompasspedycja.pl/")
+    assert ijl.listing_source_name(PRACUJ_URL) == "pracuj.pl"
+    assert ijl.listing_id_from_url(PRACUJ_URL) == "1005115616"
+    assert ijl.default_contacts_output(PRACUJ_URL).endswith("pracuj_listing.xlsx")
+
+
+def test_parse_pracuj_jsonld_fixture() -> None:
+    html = PRACUJ_FIXTURE.read_text(encoding="utf-8")
+    row = ijl.parse_job_listing_html(html, PRACUJ_URL)
+    assert row["Firma"] == "Kompas Spedycja Sp. z o. o."
+    assert row["Miasto"] == "Zielona Góra"
+    assert row["Stanowisko / Rola"] == "Spedytor / Spedytorka"
+    assert row["Branża"] == "Spedycja / transport / logistyka"
+    assert "Pełny etat" in row["Tryb pracy"]
+    assert "praca zdalna" in row["Tryb pracy"]
+    assert "praca hybrydowa" in row["Tryb pracy"]
+    assert row["Źródło / Portal"] == "pracuj.pl"
+    assert row["E-mail rekrutacyjny"] == ""
+    assert row["Strona WWW"] == "https://www.kompasspedycja.pl"
+    assert "1005115616" in row["Uwagi"]
+    assert PRACUJ_URL in row["Uwagi"]
+    assert "5500 - 19000" in row["Uwagi"]
+    assert "30 000" in row["Uwagi"] or "30000" in row["Uwagi"]
+    assert "umowa o pracę" in row["Uwagi"]
+    assert "kontrakt B2B" in row["Uwagi"]
+    assert "giełd Trans" in row["Uwagi"]
+
+
+def test_parse_pracuj_falls_back_without_jsonld() -> None:
+    html = """
+    <html><head>
+      <title>Oferta pracy Spedytor / Spedytorka, Kompas Spedycja Sp. z o. o., Zielona Góra</title>
+    </head><body>
+      <h1 data-test="text-positionName">Spedytor / Spedytorka</h1>
+      <div data-test="text-employerName">Kompas Spedycja Sp. z o. o. O firmie</div>
+      <div data-test="text-workplaces">Zielona Góra lubuskie</div>
+      <div>umowa o pracę, kontrakt B2B</div>
+      <div>praca stacjonarna, praca hybrydowa</div>
+      <section>
+        <h2>Twój zakres obowiązków</h2>
+        <ul><li>sprzedaż usług spedycyjnych</li></ul>
+      </section>
+    </body></html>
+    """
+    row = ijl.parse_job_listing_html(html, PRACUJ_URL)
+    assert row["Stanowisko / Rola"] == "Spedytor / Spedytorka"
+    assert row["Firma"] == "Kompas Spedycja Sp. z o. o."
+    assert row["Miasto"] == "Zielona Góra"
+    assert row["Branża"] == "Spedycja / transport / logistyka"
+    assert "praca hybrydowa" in row["Tryb pracy"]
+    assert row["Źródło / Portal"] == "pracuj.pl"
+    assert "1005115616" in row["Uwagi"]
+
+
+def test_main_pracuj_html_file_csv(tmp_path) -> None:
+    out = tmp_path / "kontakt.csv"
+    code = ijl.main(
+        [
+            "--url",
+            PRACUJ_URL,
+            "--html-file",
+            str(PRACUJ_FIXTURE),
+            "--email",
+            "biuro@kompas-spedycja.example.pl",
+            "--output",
+            str(out),
+        ]
+    )
+    assert code == 0
+    text = out.read_text(encoding="utf-8-sig")
+    assert "Kompas Spedycja" in text
+    assert "pracuj.pl" in text
+    assert "biuro@kompas-spedycja.example.pl" in text
+
+
+def test_identifier_prefers_value_over_name() -> None:
+    assert ijl._identifier_value({"name": "offer id", "value": "1005115616"}) == "1005115616"

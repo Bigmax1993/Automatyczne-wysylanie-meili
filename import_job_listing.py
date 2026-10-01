@@ -1,9 +1,9 @@
 """
-Import publicznego ogłoszenia o pracę (głównie OLX) do formatu kontaktów mailera.
+Import publicznego ogłoszenia o pracę (OLX, Pracuj.pl) do formatu kontaktów mailera.
 
 Skrypt czyta tylko publiczny HTML (HTTP albo plik zapisany przez użytkownika).
-Przy CAPTCHA / HTTP 403/429 nie obchodzi zabezpieczeń — kończy z czytelnym błędem
-i sugeruje ``--html-file``.
+Przy CAPTCHA / HTTP 403/429 / Cloudflare nie obchodzi zabezpieczeń — kończy
+z czytelnym błędem i sugeruje ``--html-file``.
 """
 
 from __future__ import annotations
@@ -40,9 +40,53 @@ LISTING_USER_AGENT = os.environ.get(
 )
 
 OLX_HOST_SUFFIXES = ("olx.pl", "olx.com")
+PRACUJ_HOST_SUFFIXES = ("pracuj.pl",)
 PHONE_RE = re.compile(
     r"(?:\+48[\s\-]*)?(?:\d[\s\-]*){8,11}\d",
     re.UNICODE,
+)
+SALARY_LINE_RE = re.compile(
+    r"(\d[\d\s]{1,}\d)\s*[–\-]\s*(\d[\d\s]{1,}\d)\s*zł[^\n]{0,60}",
+    re.IGNORECASE,
+)
+VOIVODESHIPS = {
+    "dolnośląskie",
+    "kujawsko-pomorskie",
+    "lubelskie",
+    "lubuskie",
+    "łódzkie",
+    "małopolskie",
+    "mazowieckie",
+    "opolskie",
+    "podkarpackie",
+    "podlaskie",
+    "pomorskie",
+    "śląskie",
+    "świętokrzyskie",
+    "warmińsko-mazurskie",
+    "wielkopolskie",
+    "zachodniopomorskie",
+}
+WORK_MODE_PHRASES = (
+    "praca stacjonarna",
+    "praca zdalna",
+    "praca hybrydowa",
+    "home office",
+)
+CONTRACT_PHRASES = (
+    "umowa o pracę",
+    "kontrakt b2b",
+    "umowa zlecenie",
+    "umowa o dzieło",
+    "samozatrudnienie",
+)
+INDUSTRY_HINTS = (
+    (
+        ("spedyc", "transport", "logistyk", "tsl", "przewoź", "przewoz"),
+        "Spedycja / transport / logistyka",
+    ),
+    (("opiekun", "opiekuń", "opieka", "pflege"), "Opieka / usługi opiekuńcze"),
+    (("biurow", "administr", "koordynator"), "Administracja / biuro"),
 )
 EMPLOYMENT_TYPE_PL = {
     "FULL_TIME": "Pełny etat",
@@ -64,12 +108,47 @@ class ListingParseError(ValueError):
     """HTML nie zawiera rozpoznawalnego ogłoszenia."""
 
 
-def is_olx_listing_url(url: str) -> bool:
+def _host_matches(url: str, suffixes: Tuple[str, ...]) -> bool:
     parsed = urlparse((url or "").strip())
     host = (parsed.hostname or "").lower().lstrip("www.")
     if not host:
         return False
-    return any(host == s or host.endswith("." + s) for s in OLX_HOST_SUFFIXES)
+    return any(host == s or host.endswith("." + s) for s in suffixes)
+
+
+def is_olx_listing_url(url: str) -> bool:
+    return _host_matches(url, OLX_HOST_SUFFIXES)
+
+
+def is_pracuj_listing_url(url: str) -> bool:
+    return _host_matches(url, PRACUJ_HOST_SUFFIXES)
+
+
+def listing_source_name(url: str) -> str:
+    if is_pracuj_listing_url(url):
+        return "pracuj.pl"
+    if is_olx_listing_url(url):
+        return "olx.pl"
+    return serp._domain(url) or "ogłoszenie"
+
+
+def listing_id_from_url(url: str) -> str:
+    raw = (url or "").strip()
+    match = re.search(r"oferta[,/](\d{5,})", raw, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    match = re.search(r"ID([A-Za-z0-9]+)", raw)
+    return match.group(1) if match else ""
+
+
+def default_contacts_output(url: str) -> str:
+    if is_pracuj_listing_url(url):
+        name = "pracuj_listing.xlsx"
+    elif is_olx_listing_url(url):
+        name = "olx_listing.xlsx"
+    else:
+        name = "job_listing.xlsx"
+    return os.path.join(os.path.expanduser("~"), "Documents", "kontakty", name)
 
 
 def _type_names(value: Any) -> List[str]:
@@ -154,6 +233,96 @@ def _first_text(*values: Any) -> str:
         if text:
             return text
     return ""
+
+
+def _identifier_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list) and value:
+        return _identifier_value(value[0])
+    if isinstance(value, dict):
+        return _first_text(
+            value.get("value"),
+            value.get("@value"),
+            value.get("text"),
+            value.get("name"),
+        )
+    return _first_text(value)
+
+
+def _city_without_voivodeship(city: str) -> str:
+    raw = re.sub(r"\s+", " ", (city or "").strip())
+    if not raw:
+        return ""
+    parts = [p for p in re.split(r"[\s,]+", raw) if p]
+    if len(parts) >= 2 and parts[-1].lower() in VOIVODESHIPS:
+        return " ".join(parts[:-1]).strip(" ,")
+    return raw
+
+
+def _parse_pracuj_document_title(title: str) -> Tuple[str, str, str]:
+    raw = re.sub(r"\s+[•|].*$", "", (title or "").strip())
+    raw = re.sub(r"^Oferta pracy\s+", "", raw, flags=re.IGNORECASE).strip()
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if len(parts) >= 3:
+        return parts[0], ",".join(parts[1:-1]).strip(), parts[-1]
+    if len(parts) == 2:
+        return parts[0], parts[1], ""
+    return raw, "", ""
+
+
+def _infer_industry(title: str, description: str, explicit: str = "") -> str:
+    if explicit:
+        return explicit
+    hay = f"{title} {description}".lower()
+    for tokens, label in INDUSTRY_HINTS:
+        if any(tok in hay for tok in tokens):
+            return label
+    return "(do ustalenia)"
+
+
+def _phrases_from_text(text: str, phrases: Tuple[str, ...]) -> List[str]:
+    hay = (text or "").lower()
+    found: List[str] = []
+    for phrase in phrases:
+        if phrase in hay:
+            found.append(phrase)
+    return found
+
+
+def _work_mode_from_text(text: str) -> str:
+    return ", ".join(_phrases_from_text(text, WORK_MODE_PHRASES))
+
+
+def _contract_from_text(text: str) -> str:
+    found = _phrases_from_text(text, CONTRACT_PHRASES)
+    pretty = []
+    for item in found:
+        if item == "kontrakt b2b":
+            pretty.append("kontrakt B2B")
+        else:
+            pretty.append(item)
+    return ", ".join(pretty)
+
+
+def _salary_lines_from_text(text: str) -> List[str]:
+    found: List[str] = []
+    seen = set()
+    for match in SALARY_LINE_RE.finditer(text or ""):
+        line = re.sub(r"\s+", " ", match.group(0)).strip()
+        key = line.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(line)
+        if len(found) >= 4:
+            break
+    return found
+
+
+def _company_without_o_firmie(company: str) -> str:
+    raw = (company or "").strip()
+    return re.sub(r"\s+O firmie\s*$", "", raw, flags=re.IGNORECASE).strip()
 
 
 def _html_to_text(value: str) -> str:
@@ -317,11 +486,41 @@ def _extract_phones(text: str, listing_id: str = "") -> str:
     return ", ".join(found)
 
 
+def _attr_text(soup: BeautifulSoup, **attrs: str) -> str:
+    node = soup.find(attrs=attrs)
+    return node.get_text(" ", strip=True) if node else ""
+
+
+def _pracuj_section_text(soup: BeautifulSoup) -> str:
+    parts: List[str] = []
+    for heading in (
+        "Twój zakres obowiązków",
+        "Nasze wymagania",
+        "To oferujemy",
+    ):
+        node = soup.find(string=re.compile(rf"^{re.escape(heading)}$", re.IGNORECASE))
+        if not node:
+            continue
+        block = node.find_parent()
+        if block is None:
+            continue
+        text = block.get_text("\n", strip=True)
+        sibling = block.find_next_sibling()
+        if sibling:
+            extra = sibling.get_text("\n", strip=True)
+            if extra:
+                text = f"{text}\n{extra}"
+        if text:
+            parts.append(text)
+    return "\n\n".join(parts)
+
+
 def _fallback_from_html(html: str) -> Dict[str, str]:
     soup = BeautifulSoup(html, "html.parser")
     title = ""
     for selector in (
         {"name": "h1", "attrs": {"data-cy": "ad_title"}},
+        {"name": "h1", "attrs": {"data-test": "text-positionName"}},
         {"name": "h1"},
     ):
         node = soup.find(**selector) if "attrs" in selector else soup.find(selector["name"])
@@ -334,28 +533,48 @@ def _fallback_from_html(html: str) -> Dict[str, str]:
         title = (og.get("content") or "").strip() if og else ""
         title = re.sub(r"\s+[•|].*$", "", title).strip()
 
-    desc_node = soup.find(attrs={"data-cy": "ad_description"})
+    parsed_title, parsed_company, parsed_city = ("", "", "")
+    if title.lower().startswith("oferta pracy") or (title.count(",") >= 2):
+        parsed_title, parsed_company, parsed_city = _parse_pracuj_document_title(title)
+        if parsed_title:
+            title = parsed_title
+
+    desc_node = soup.find(attrs={"data-cy": "ad_description"}) or soup.find(
+        attrs={"data-test": "section-description"}
+    )
     description = desc_node.get_text("\n", strip=True) if desc_node else ""
+    if not description:
+        description = _pracuj_section_text(soup)
     if not description:
         ogd = soup.find("meta", attrs={"property": "og:description"})
         description = (ogd.get("content") or "").strip() if ogd else ""
 
     company = ""
-    for sel in (
-        {"attrs": {"data-cy": "seller-name"}},
-        {"attrs": {"data-testid": "seller-name"}},
+    for attrs in (
+        {"data-cy": "seller-name"},
+        {"data-testid": "seller-name"},
+        {"data-test": "text-employerName"},
     ):
-        node = soup.find(attrs=sel["attrs"])
-        if node:
-            company = node.get_text(" ", strip=True)
-            if company:
-                break
+        company = _attr_text(soup, **attrs)
+        if company:
+            break
+    if not company:
+        company = parsed_company
+    company = _company_without_o_firmie(company)
 
+    city = _city_without_voivodeship(
+        _attr_text(soup, **{"data-test": "text-workplaces"}) or parsed_city
+    )
+    visible = soup.get_text("\n", strip=True)
     return {
         "title": title,
         "company": company,
         "description": description,
-        "visible_text": soup.get_text("\n", strip=True),
+        "city": city,
+        "contract": _contract_from_text(visible),
+        "salary": "; ".join(_salary_lines_from_text(visible)),
+        "work_mode": _work_mode_from_text(visible),
+        "visible_text": visible,
     }
 
 
@@ -366,37 +585,60 @@ def parse_job_listing_html(html: str, source_url: str) -> Dict[str, str]:
     visible = fallback.get("visible_text") or ""
 
     title = _first_text(posting.get("title"), fallback.get("title"))
+    if title.lower().startswith("oferta pracy"):
+        title, _, _ = _parse_pracuj_document_title(title)
     if not title:
         raise ListingParseError("Nie znaleziono tytułu ogłoszenia w HTML.")
 
-    company = _organization_name(posting.get("hiringOrganization")) or fallback.get(
-        "company", ""
+    company = _company_without_o_firmie(
+        _organization_name(posting.get("hiringOrganization"))
+        or fallback.get("company", "")
     )
     if not company:
         company = "(brak nazwy)"
 
     city, street = _address_parts(posting)
     if not city:
-        city = _visible_labeled_field(visible, "Lokalizacja") or "(brak miasta)"
+        city = (
+            fallback.get("city")
+            or _visible_labeled_field(visible, "Lokalizacja")
+            or "(brak miasta)"
+        )
         if "," in city:
             city = city.split(",")[-1].strip()
+    city = _city_without_voivodeship(city) or city
 
     description = _html_to_text(
         _first_text(posting.get("description"), fallback.get("description"))
     )
     salary = _format_salary(posting)
+    extra_salaries = _salary_lines_from_text(visible)
     if not salary:
-        salary = _visible_labeled_field(visible, "Wynagrodzenie")
+        salary = (
+            fallback.get("salary")
+            or _visible_labeled_field(visible, "Wynagrodzenie")
+            or (extra_salaries[0] if extra_salaries else "")
+        )
 
     mode = _format_employment_type(posting.get("employmentType"))
     if not mode:
-        mode = _visible_labeled_field(visible, "Wymiar pracy") or "(do ustalenia)"
+        mode = _visible_labeled_field(visible, "Wymiar pracy")
+    work_mode = fallback.get("work_mode") or _work_mode_from_text(visible)
+    if work_mode:
+        mode = ", ".join(part for part in (mode, work_mode) if part)
+    if not mode:
+        mode = "(do ustalenia)"
 
-    contract = _visible_labeled_field(visible, "Typ umowy")
-    listing_id = _first_text(
-        posting.get("identifier"),
-        posting.get("id"),
+    contract = (
+        _visible_labeled_field(visible, "Typ umowy")
+        or fallback.get("contract")
+        or _contract_from_text(visible)
     )
+    listing_id = _identifier_value(posting.get("identifier")) or _first_text(
+        posting.get("id")
+    )
+    if not listing_id:
+        listing_id = listing_id_from_url(source_url)
     id_match = re.search(r"ID[:\s-]*([A-Za-z0-9]+)", visible, re.IGNORECASE)
     if not listing_id and id_match:
         listing_id = id_match.group(1)
@@ -412,19 +654,13 @@ def parse_job_listing_html(html: str, source_url: str) -> Dict[str, str]:
         email = match.group(0) if match else ""
     phone = _extract_phones(f"{description}\n{visible}", listing_id=listing_id)
 
-    industry = _first_text(posting.get("industry"))
-    if not industry:
-        hay = f"{title} {description}".lower()
-        if any(tok in hay for tok in ("opiekun", "opiekuń", "opieka", "pflege")):
-            industry = "Opieka / usługi opiekuńcze"
-        elif any(tok in hay for tok in ("biurow", "administr", "koordynator")):
-            industry = "Administracja / biuro"
-        else:
-            industry = "(do ustalenia)"
-
-    source = "olx.pl" if is_olx_listing_url(source_url) else (
-        serp._domain(source_url) or "ogłoszenie"
+    industry = _infer_industry(
+        title,
+        description,
+        explicit=_first_text(posting.get("industry")),
     )
+
+    source = listing_source_name(source_url)
 
     notes_parts = []
     if source_url:
@@ -433,6 +669,9 @@ def parse_job_listing_html(html: str, source_url: str) -> Dict[str, str]:
         notes_parts.append(f"ID ogłoszenia: {listing_id}")
     if salary:
         notes_parts.append(f"Wynagrodzenie: {salary}")
+    extra_salary_notes = [s for s in extra_salaries if s and s not in salary]
+    if extra_salary_notes:
+        notes_parts.append("Inne stawki z ogłoszenia: " + "; ".join(extra_salary_notes))
     if contract:
         notes_parts.append(f"Typ umowy: {contract}")
     if street:
@@ -573,7 +812,7 @@ def import_listing(
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Import publicznego ogłoszenia o pracę (OLX JSON-LD / HTML) "
+            "Import publicznego ogłoszenia o pracę (OLX / Pracuj.pl, JSON-LD / HTML) "
             "do arkusza kontaktów mailera."
         )
     )
@@ -585,7 +824,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--url",
         required=True,
-        help="Publiczny URL ogłoszenia (np. https://www.olx.pl/oferta/praca/...)",
+        help=(
+            "Publiczny URL ogłoszenia "
+            "(np. https://www.pracuj.pl/praca/..., https://www.olx.pl/oferta/praca/...)"
+        ),
     )
     parser.add_argument(
         "--html-file",
@@ -609,15 +851,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument(
         "--output",
-        default=os.path.join(
-            os.path.expanduser("~"),
-            "Documents",
-            "kontakty",
-            "olx_listing.xlsx",
-        ),
-        help="Ścieżka .xlsx albo .csv",
+        default="",
+        help="Ścieżka .xlsx albo .csv (domyślnie Documents/kontakty/<portal>_listing.xlsx)",
     )
     args = parser.parse_args(argv)
+    output = (args.output or "").strip() or default_contacts_output(args.url)
 
     html: Optional[str] = None
     html_file = (args.html_file or "").strip()
@@ -640,7 +878,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         logger.error("%s", exc)
         return 1
 
-    path = write_contacts([row], args.output)
+    path = write_contacts([row], output)
     logger.info("Zapisano kontakt z ogłoszenia: %s", path)
     logger.info(
         "Firma=%s | Rola=%s | Miasto=%s | E-mail=%s | WWW=%s",

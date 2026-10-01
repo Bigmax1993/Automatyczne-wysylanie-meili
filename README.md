@@ -114,15 +114,16 @@ Szukane są m.in. wzorce `CV*.pdf` w `Documents` oraz w podfolderach **`CV`**, `
 
 `build_contacts_serpapi.py` — wymaga `SERPAPI_API_KEY`. Przy braku klucza lub limicie dziennej zwraca kod `2`; pipeline może użyć istniejącego Excela lub folderu `kontakty`.
 
-## Import ogłoszenia OLX
+## Import ogłoszenia (OLX / Pracuj.pl)
 
 Pojedyncze ogłoszenie (publiczny HTML / JSON-LD `JobPosting`) do arkusza kontaktów:
 
 ```powershell
+python import_job_listing.py --url "https://www.pracuj.pl/praca/....,oferta,123" --output "$env:USERPROFILE\Documents\kontakty\pracuj_listing.xlsx"
 python import_job_listing.py --url "https://www.olx.pl/oferta/praca/....html" --output "$env:USERPROFILE\Documents\kontakty\olx_listing.xlsx"
 ```
 
-Gdy OLX zwraca 403/CAPTCHA z sieci agenta, zapisz stronę oferty i podaj `--html-file`. Opcjonalnie `--company-website` (oficjalna strona firmy, nie portal) i `--enrich-email`. Kod `2` = blokada pobrania (bez obchodzenia WAF).
+Gdy portal zwraca 403/CAPTCHA/Cloudflare z sieci agenta, zapisz stronę oferty i podaj `--html-file`. Opcjonalnie `--company-website` (oficjalna strona firmy, nie portal) i `--enrich-email`. Kod `2` = blokada pobrania (bez obchodzenia WAF).
 
 ## Testy
 
