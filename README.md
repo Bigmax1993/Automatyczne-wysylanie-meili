@@ -84,6 +84,17 @@ Przed ręcznym wywołaniem ustaw zmienne (`$env:...` lub `. .\local_env.ps1`).
 
 `clean_validate_send_pipeline.py`: czyta CSV/XLSX, czyści przez OpenAI, waliduje, zapisuje CSV, wysyła maile. **Kolejność:** najpierw kończy wysyłkę z głównego `--input` (np. `Kontakty_serpapi.xlsx`), potem **w tym samym uruchomieniu** przetwarza pozostałe pliki `.xlsx`/`.xls`/`.csv` z `Documents\kontakty` (pomija tylko plik, który był głównym wejściem, jeśli leży w tym folderze). `run_pipeline.ps1` przekazuje `--extra-contacts-dir` jawnie. Zob. też `--skip-extra-contacts`, `--skip-clean`, `--validate-only`, `--dry-run`.
 
+## Pojedyncza oferta z portalu (URL)
+
+Link do ogłoszenia (np. pracuj.pl) można dodać jako kontakt do `Documents\kontakty\Kontakty_oferty.xlsx` — pipeline przetworzy go razem z pozostałymi plikami dodatkowymi:
+
+```powershell
+python job_offer_import.py "https://www.pracuj.pl/praca/spedytor-spedytorka-zielona-gora,oferta,1005115616" --website "https://firma.pl"
+python job_offer_import.py "<url>" --email "rekrutacja@firma.pl" --dry-run   # tylko podgląd wiersza
+```
+
+Firma, miasto, stanowisko i tryb pracy czytane są ze strony ogłoszenia (JSON-LD / tytuł), a przy blokadzie portalu — z samego URL i parametrów (`--company`, `--city`, `--role`, `--work-mode`, `--contract`). E-mail rekrutacyjny podaj przez `--email` albo `--website` (z `FETCH_EMAIL_FROM_WEBSITE=1`). Szczegóły: sekcja 7.6 dokumentacji.
+
 ## Rejestr wysłanych maili (JSON) i follow-up
 
 Po każdej **udanej** wysyłce (nie w dry-run, wyłączone pod pytest) dopisywany jest wpis do pliku **JSON Lines** (`.jsonl`) w katalogu domyślnie `Documents\pipeline_logs\sent_mail_registry\`. Nazwa pliku odpowiada partii wejściowej (np. `Kontakty_serpapi.jsonl`). Wpis zawiera m.in. e-mail, firmę, pola do ponownej personalizacji, `sent_at`, flagi `reply_received` i `follow_up_sent_at`.

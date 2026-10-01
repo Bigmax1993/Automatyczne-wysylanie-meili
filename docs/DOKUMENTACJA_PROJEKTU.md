@@ -23,6 +23,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 | `excel_workbook_reader.py` | Wczytywanie wieloarkuszowych raportów Excel (nagłówki, pomijane arkusze) |
 | `domain_blocklist.py` | Blokada domen odbiorców (`config/blocked_domains.txt` + env) |
 | `web_page_context.py` | Opcjonalny kontekst z publicznej strony WWW dla OpenAI |
+| `job_offer_import.py` | Import pojedynczej oferty pracy (URL z portalu, np. pracuj.pl) jako wiersza kontaktu do `Documents\kontakty` |
 | `fetch_throttle.py` | Odstępy HTTP per host przy pobieraniu stron |
 | `pipeline_logging.py` | Konfiguracja `logging` (stdout + opcjonalny plik rotowany) |
 | `json_data_backup.py` | Kopie zapasowe `DataFrame` do JSON po zapisie CSV/XLSX |
@@ -165,6 +166,19 @@ python clean_validate_send_pipeline.py --validate-only --input "ścieżka\plik.c
 ```powershell
 python clean_validate_send_pipeline.py --skip-clean --input "ścieżka\Kontakty_cleaned.csv" --skip-extra-contacts
 ```
+
+### 7.6. Pojedyncza oferta z portalu (URL)
+
+`job_offer_import.py` zamienia link do ogłoszenia (np. pracuj.pl) na wiersz kontaktu i dopisuje go do `Documents\kontakty\Kontakty_oferty.xlsx` (katalog `EXTRA_CONTACTS_DIR`), skąd pipeline przetwarza go jak pozostałe pliki dodatkowe.
+
+```powershell
+python job_offer_import.py "https://www.pracuj.pl/praca/spedytor-spedytorka-zielona-gora,oferta,1005115616" --website "https://firma.pl"
+python job_offer_import.py "<url>" --email "rekrutacja@firma.pl" --dry-run
+```
+
+Dane pobierane są w kolejności: JSON-LD `JobPosting` ze strony → `<title>` / `og:title` → slug URL (stanowisko, miasto, id oferty) → parametry CLI (`--company`, `--city`, `--role`, `--website`, `--email`, `--work-mode`, `--contract`). Przy blokadzie strony (403 / CAPTCHA) skrypt **nie obchodzi zabezpieczeń** — buduje wiersz z URL i parametrów, a w `Uwagi` zapisuje `Dane z URL (strona: blocked)`. Ta sama oferta (URL / id) nie jest dopisywana dwa razy (`--allow-duplicate` wymusza). `Źródło / Portal` = domena portalu, więc reguła B2B dla e-commerce nie zadziała; w `Uwagi` trafia URL i forma zatrudnienia (UOP / B2B) pod `_detect_contract_preference`.
+
+E-mail rekrutacyjny z ogłoszenia zwykle nie jest publiczny — podaj `--email` albo `--website` z `FETCH_EMAIL_FROM_WEBSITE=1`, inaczej walidacja oznaczy wiersz „Brak e-maila”.
 
 ## 8. Harmonogram (opcjonalnie)
 
