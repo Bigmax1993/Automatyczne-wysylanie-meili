@@ -105,6 +105,32 @@ JOB_PORTAL_DOMAINS = (
     "bulldogjob.pl",
     "gowork.pl",
 )
+# Katalogi firm / rejestry (KRS, NIP, REGON) — to nie jest strona WWW firmy, tylko wizytówka
+# w bazie zewnętrznej (np. https://aleo.com/pl/firma/<slug>). Traktowane jak portale pracy:
+# nie trafiają do kolumny „Strona WWW” i nie są skanowane w poszukiwaniu e-maila.
+BUSINESS_DIRECTORY_DOMAINS = (
+    "aleo.com",
+    "rejestr.io",
+    "krs-online.com.pl",
+    "krs-pobierz.pl",
+    "panoramafirm.pl",
+    "pkt.pl",
+    "firmy.net",
+    "baza-firm.com.pl",
+    "infoveriti.pl",
+    "bizraport.pl",
+    "mojepanstwo.pl",
+    "ceidg.gov.pl",
+    "biznes.gov.pl",
+    "ems.ms.gov.pl",
+    "ekrs.ms.gov.pl",
+    "companywall.pl",
+    "cylex.pl",
+    "dnb.com",
+    "firmove.pl",
+    "wyszukiwarkaregon.stat.gov.pl",
+)
+EXCLUDED_WEBSITE_DOMAINS = JOB_PORTAL_DOMAINS + BUSINESS_DIRECTORY_DOMAINS
 CAPTCHA_HINTS = (
     "captcha",
     "recaptcha",
@@ -256,9 +282,30 @@ def _domain(url: str) -> str:
     return netloc.strip()
 
 
+def _host_for_match(value: str) -> str:
+    v = (value or "").strip()
+    if "://" in v:
+        return _domain(v)
+    return v.lower().replace("www.", "").split("/", 1)[0].strip()
+
+
+def _host_matches_any(host: str, domains: tuple[str, ...]) -> bool:
+    if not host:
+        return False
+    return any(host == d or host.endswith("." + d) for d in domains)
+
+
 def _is_job_portal_domain(value: str) -> bool:
-    d = _domain(value) if "://" in value else value.lower().replace("www.", "")
-    return any(d.endswith(portal) for portal in JOB_PORTAL_DOMAINS)
+    return _host_matches_any(_host_for_match(value), JOB_PORTAL_DOMAINS)
+
+
+def _is_business_directory_domain(value: str) -> bool:
+    return _host_matches_any(_host_for_match(value), BUSINESS_DIRECTORY_DOMAINS)
+
+
+def _is_excluded_website_domain(value: str) -> bool:
+    """Portal pracy lub katalog/rejestr firm — nie traktować jako strony WWW firmy."""
+    return _host_matches_any(_host_for_match(value), EXCLUDED_WEBSITE_DOMAINS)
 
 
 def _looks_like_captcha_or_block(status_code: int, html: str) -> bool:
@@ -304,7 +351,7 @@ def _extract_email_from_html(html: str) -> str:
 
 def _extract_recruit_email_from_site(base_url: str, timeout: float = 8.0) -> str:
     root = _normalize_url(base_url)
-    if not root:
+    if not root or _is_excluded_website_domain(root):
         return ""
 
     candidates = [root]
@@ -361,14 +408,14 @@ def _extract_organic(result: dict, category: str, query: str, city: str) -> Dict
     title = result.get("title", "")
     link = result.get("link", "")
     company = _clean_company_name(title) or _domain(link)
-    website = "" if _is_job_portal_domain(link) else link
+    website = "" if _is_excluded_website_domain(link) else link
     return _row(company, city, website, "", category, query, "organic")
 
 
 def _extract_local(result: dict, category: str, query: str, city: str) -> Dict[str, str]:
     company = result.get("title", "")
     website = result.get("website", "")
-    if _is_job_portal_domain(website):
+    if _is_excluded_website_domain(website):
         website = ""
     phone = result.get("phone", "")
     local_city = city
@@ -427,7 +474,7 @@ def _find_company_website(api_key: str, company: str, city: str) -> str:
     data = _query_serpapi(api_key, query, start=0, num=10)
     for result in data.get("organic_results", []):
         link = result.get("link", "")
-        if link and not _is_job_portal_domain(link):
+        if link and not _is_excluded_website_domain(link):
             return _normalize_url(link)
     return ""
 
@@ -439,7 +486,7 @@ def _find_public_contact_page(api_key: str, company: str, city: str) -> str:
     data = _query_serpapi(api_key, query, start=0, num=10)
     for result in data.get("organic_results", []):
         link = result.get("link", "")
-        if link and not _is_job_portal_domain(link):
+        if link and not _is_excluded_website_domain(link):
             return _normalize_url(link)
     return ""
 
@@ -720,7 +767,7 @@ def main() -> None:
         cache: Dict[str, str] = {}
         for i, row in enumerate(all_rows):
             current = row.get("Strona WWW", "")
-            if current and not _is_job_portal_domain(current):
+            if current and not _is_excluded_website_domain(current):
                 continue
             key = f"{row.get('Firma','')}|{row.get('Miasto','')}".lower().strip()
             if key in cache:

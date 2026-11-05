@@ -98,6 +98,18 @@ def normalize_fetch_url(website: str) -> Optional[str]:
     return u
 
 
+def _is_excluded_source_url(url: str) -> bool:
+    """Portal pracy / katalog firm (np. aleo.com) — to nie jest strona firmy, nie ma czego streszczać."""
+    try:
+        from build_contacts_serpapi import _is_excluded_website_domain
+    except Exception:  # pragma: no cover
+        return False
+    try:
+        return bool(_is_excluded_website_domain(url))
+    except Exception:  # pragma: no cover
+        return False
+
+
 def _cache_put(url: str, excerpt: str) -> None:
     while len(_cache) >= WEB_FETCH_CACHE_MAX_URLS and _cache:
         oldest_key = min(_cache.items(), key=lambda kv: kv[1][0])[0]
@@ -126,7 +138,7 @@ def fetch_page_excerpt(url: str) -> Optional[str]:
     if not WEB_CONTEXT_ENABLED or requests is None or BeautifulSoup is None:
         return None
     norm = normalize_fetch_url(url)
-    if not norm:
+    if not norm or _is_excluded_source_url(norm):
         return None
 
     now = time.time()

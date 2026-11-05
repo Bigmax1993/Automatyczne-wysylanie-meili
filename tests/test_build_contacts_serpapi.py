@@ -376,6 +376,88 @@ def test_extract_local_clears_job_portal_website() -> None:
     assert row["Strona WWW"] == ""
 
 
+ALEO_PROFILE_URL = "https://aleo.com/pl/firma/abtm-sp-z-oo-leszno"
+
+
+def test_is_business_directory_domain_detects_registry_profiles() -> None:
+    assert serp._is_business_directory_domain(ALEO_PROFILE_URL)
+    assert serp._is_business_directory_domain("https://www.aleo.com/pl/firma/x")
+    assert serp._is_business_directory_domain("aleo.com")
+    assert serp._is_business_directory_domain("https://rejestr.io/krs/870567/abtm")
+    assert serp._is_business_directory_domain("https://panoramafirm.pl/abtm")
+    assert not serp._is_business_directory_domain("https://abtm.pl")
+    assert not serp._is_job_portal_domain(ALEO_PROFILE_URL)
+
+
+def test_is_excluded_website_domain_covers_portals_and_directories() -> None:
+    assert serp._is_excluded_website_domain("https://pracuj.pl/oferta/1")
+    assert serp._is_excluded_website_domain(ALEO_PROFILE_URL)
+    assert not serp._is_excluded_website_domain("https://firma.example.com")
+
+
+def test_domain_match_requires_label_boundary() -> None:
+    assert serp._is_job_portal_domain("https://grupa.pracuj.pl/x")
+    assert not serp._is_job_portal_domain("https://notpracuj.pl/x")
+    assert not serp._is_business_directory_domain("https://paleo.com/x")
+
+
+def test_extract_organic_clears_business_directory_website() -> None:
+    row = serp._extract_organic(
+        {
+            "title": (
+                "Firma ABTM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ, LESZNO - NIP, KRS, REGON"
+            ),
+            "link": ALEO_PROFILE_URL,
+        },
+        category="Software house data BI",
+        query="test",
+        city="Leszno",
+    )
+    assert row["Strona WWW"] == ""
+    assert row["Firma"].startswith("Firma ABTM")
+
+
+def test_extract_local_clears_business_directory_website() -> None:
+    row = serp._extract_local(
+        {"title": "ABTM Sp. z o.o.", "website": ALEO_PROFILE_URL, "phone": "", "address": ""},
+        category="Agencja outsourcingowa IT",
+        query="test",
+        city="Leszno",
+    )
+    assert row["Strona WWW"] == ""
+
+
+def test_find_company_website_skips_business_directory_result(monkeypatch) -> None:
+    def _fake_query(_api_key: str, _query: str, start: int, num: int) -> dict:
+        return {
+            "organic_results": [
+                {"link": ALEO_PROFILE_URL},
+                {"link": "https://krs-online.com.pl/abtm-krs-870567.html"},
+                {"link": "https://abtm.pl"},
+            ]
+        }
+
+    monkeypatch.setattr(serp, "_query_serpapi", _fake_query)
+    assert serp._find_company_website("k", "ABTM", "Leszno") == "https://abtm.pl"
+
+
+def test_find_public_contact_page_skips_business_directory_result(monkeypatch) -> None:
+    def _fake_query(_api_key: str, _query: str, start: int, num: int) -> dict:
+        return {"organic_results": [{"link": ALEO_PROFILE_URL}, {"link": "https://abtm.pl/kontakt"}]}
+
+    monkeypatch.setattr(serp, "_query_serpapi", _fake_query)
+    assert serp._find_public_contact_page("k", "ABTM", "Leszno") == "https://abtm.pl/kontakt"
+
+
+def test_extract_recruit_email_from_site_does_not_scrape_business_directory(monkeypatch) -> None:
+    def _fake_get(_url, timeout, headers):
+        raise AssertionError("katalog firm nie powinien być pobierany")
+
+    monkeypatch.setattr(serp.requests, "get", _fake_get)
+    assert serp._extract_recruit_email_from_site(ALEO_PROFILE_URL) == ""
+    assert serp._extract_recruit_email_from_site("aleo.com/pl/firma/abtm-sp-z-oo-leszno") == ""
+
+
 def test_main_daily_limit_exits_2(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("SERPAPI_DAILY_LIMIT_ENABLED", "1")
     monkeypatch.setenv("SERPAPI_RUN_STATE_PATH", str(tmp_path / "st"))

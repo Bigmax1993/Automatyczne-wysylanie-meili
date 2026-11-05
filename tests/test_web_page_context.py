@@ -34,6 +34,18 @@ def test_fetch_page_excerpt_disabled_by_default(monkeypatch) -> None:
     assert wp.fetch_page_excerpt("https://example.com") is None
 
 
+def test_fetch_page_excerpt_skips_business_directory_profile(monkeypatch) -> None:
+    monkeypatch.setattr(wp, "WEB_CONTEXT_ENABLED", True)
+
+    def _boom(*_a, **_k):
+        raise AssertionError("katalog firm nie powinien być pobierany")
+
+    monkeypatch.setattr(wp.requests, "get", _boom)
+    wp.clear_fetch_cache()
+    assert wp.fetch_page_excerpt("https://aleo.com/pl/firma/abtm-sp-z-oo-leszno") is None
+    assert wp.fetch_page_excerpt("https://pracuj.pl/oferta/1") is None
+
+
 def test_append_page_excerpt_merges_json(monkeypatch) -> None:
     monkeypatch.setattr(wp, "WEB_CONTEXT_ENABLED", True)
 

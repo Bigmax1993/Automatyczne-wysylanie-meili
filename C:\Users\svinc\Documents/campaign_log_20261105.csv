@@ -1,0 +1,37 @@
+﻿timestamp,email,firma,subject,status,reason
+2026-11-05T14:35:16.559954,jan@example.com,Firma A,Temat testowy,sent,
+2026-11-05T14:35:16.577611,anna@example.com,Firma B,Temat testowy,sent,
+2026-11-05T14:35:16.581441,bledny-email,Firma C,,invalid_email,invalid_email
+2026-11-05T14:35:16.625597,regresja@example.com,Firma R,Temat,sent,
+2026-11-05T14:35:16.627147,regresja2@example.com,Firma RX,,openai_error,OpenAI nie wygenerował treści po 3 próbach: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+2026-11-05T14:35:16.629757,uop@example.com,Eshop,Temat,sent,
+2026-11-05T14:35:40.758382,jan@example.com,Firma Test,T,sent,
+2026-11-05T14:35:40.760832,jan@example.com,Firma Test,T,sent,
+2026-11-05T14:35:40.762699,zly-email,Firma Test,,invalid_email,invalid_email
+2026-11-05T14:35:40.764349,jan@example.com,Firma Test,,openai_error,OpenAI nie wygenerował treści po 3 próbach: openai fail
+2026-11-05T14:35:40.766267,jan@example.com,Firma Test,Temat,smtp_error,SMTP nie wysłał wiadomości po 3 próbach: smtp fail
+2026-11-05T14:35:40.768470,jan@example.com,Firma Test,Temat,sent,
+2026-11-05T14:35:40.773665,jan@example.com,Firma Test,Temat,sent,
+2026-11-05T14:35:40.854600,sent@example.com,A,,skipped,already_sent
+2026-11-05T14:35:40.854703,,B,,skipped,missing_email
+2026-11-05T14:35:40.855732,new@example.com,C,Temat,sent,
+2026-11-05T14:35:40.857786,new2@example.com,Firma D,Temat,sent,
+2026-11-05T14:35:43.484579,a@zablokowana.pl,Z,,skipped,blocked_domain
+2026-11-05T14:35:50.940403,jan@example.com,Firma A,Temat testowy,sent,
+2026-11-05T14:35:50.962419,anna@example.com,Firma B,Temat testowy,sent,
+2026-11-05T14:35:50.966348,bledny-email,Firma C,,invalid_email,invalid_email
+2026-11-05T14:35:51.012392,regresja@example.com,Firma R,Temat,sent,
+2026-11-05T14:35:51.013947,regresja2@example.com,Firma RX,,openai_error,OpenAI nie wygenerował treści po 3 próbach: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+2026-11-05T14:35:51.016411,uop@example.com,Eshop,Temat,sent,
+2026-11-05T14:36:15.169490,jan@example.com,Firma Test,T,sent,
+2026-11-05T14:36:15.172049,jan@example.com,Firma Test,T,sent,
+2026-11-05T14:36:15.174014,zly-email,Firma Test,,invalid_email,invalid_email
+2026-11-05T14:36:15.175663,jan@example.com,Firma Test,,openai_error,OpenAI nie wygenerował treści po 3 próbach: openai fail
+2026-11-05T14:36:15.177793,jan@example.com,Firma Test,Temat,smtp_error,SMTP nie wysłał wiadomości po 3 próbach: smtp fail
+2026-11-05T14:36:15.180132,jan@example.com,Firma Test,Temat,sent,
+2026-11-05T14:36:15.186162,jan@example.com,Firma Test,Temat,sent,
+2026-11-05T14:36:15.311156,sent@example.com,A,,skipped,already_sent
+2026-11-05T14:36:15.311260,,B,,skipped,missing_email
+2026-11-05T14:36:15.312525,new@example.com,C,Temat,sent,
+2026-11-05T14:36:15.314824,new2@example.com,Firma D,Temat,sent,
+2026-11-05T14:36:17.810325,a@zablokowana.pl,Z,,skipped,blocked_domain
