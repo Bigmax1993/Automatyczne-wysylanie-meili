@@ -18,6 +18,7 @@ Projekt automatyzuje pozyskanie leadów i wysyłkę spersonalizowanych wiadomoś
 | Plik | Rola |
 |------|------|
 | `build_contacts_serpapi.py` | Zbiór leadów z SerpAPI, enrichment e-mail ze stron |
+| `import_company_profile.py` | Import profilu firmy z ALEO.com (NIP/KRS, branża, PKD) do arkusza kontaktów; e-mail z `--email` lub oficjalnej strony (`--enrich-email`) |
 | `clean_validate_send_pipeline.py` | Pipeline: czyszczenie OpenAI → walidacja → CSV → wysyłka |
 | `contact_mailer.py` | Rdzeń wysyłki (retry, limity, personalizacja, statusy, CV, SMTP Gmail) |
 | `excel_workbook_reader.py` | Wczytywanie wieloarkuszowych raportów Excel (nagłówki, pomijane arkusze) |

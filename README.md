@@ -76,9 +76,20 @@ Pełna lista i opisy: **`env.example`**.
 python contact_mailer.py
 python clean_validate_send_pipeline.py --input "ścieżka\plik.xlsx" --output-csv "ścieżka\out.csv"
 python build_contacts_serpapi.py --help
+python import_company_profile.py --help
 ```
 
 Przed ręcznym wywołaniem ustaw zmienne (`$env:...` lub `. .\local_env.ps1`).
+
+## Import profilu firmy z ALEO.com
+
+Pojedynczy profil firmy (publiczny HTML / JSON-LD `LocalBusiness` + dane rejestrowe KRS) do arkusza kontaktów:
+
+```powershell
+python import_company_profile.py --url "https://aleo.com/pl/firma/abtm-sp-z-oo-leszno" --company-website "https://www.abtm.pl/" --enrich-email --output "$env:USERPROFILE\Documents\kontakty\aleo_abtm.xlsx"
+```
+
+ALEO zwykle **nie podaje e-maila** firmy — dodaj `--email` albo oficjalną stronę `--company-website` z `--enrich-email` (adres ze strony głównej, `/kontakt`, `/kariera`). Rola domyślnie wynika z branży (transport/spedycja → `Spedytor`); zmienisz ją przez `--role`. Do `Uwagi` trafiają NIP/KRS/REGON, siedziba i główne kody PKD (bez danych osobowych zarządu). Kod `2` = blokada pobrania lub strona bez danych firmy — zapisz stronę w przeglądarce i podaj `--html-file`. Polecenie powyżej daje dla ABTM sp. z o.o. (Leszno) wiersz z `biuro@abtm.pl` ze strony firmy — plik w `Documents\kontakty` pipeline wyśle przy kolejnym przebiegu.
 
 ## Pipeline: clean → walidacja → CSV → wysyłka
 
