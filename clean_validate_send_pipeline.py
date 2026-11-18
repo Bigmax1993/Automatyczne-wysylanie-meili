@@ -20,7 +20,7 @@ from openai import OpenAI
 
 import contact_mailer as cm
 import pipeline_version as pv
-from domain_blocklist import recipient_domain_is_blocked
+from domain_blocklist import recipient_is_blocked
 from excel_workbook_reader import read_excel_workbook
 
 logger = logging.getLogger(__name__)
@@ -278,7 +278,7 @@ def _run_validate_only_report(input_path: str) -> None:
         if not email or not cm._is_valid_email(email):
             counts["brak_lub_zly_email"] += 1
             continue
-        if recipient_domain_is_blocked(email):
+        if recipient_is_blocked(email, also_block_sender=cm.SENDER_EMAIL):
             counts["domena_zablokowana"] += 1
             continue
         counts["nadaje_sie_do_wysylki"] += 1
@@ -373,10 +373,10 @@ def _send_from_cleaned_csv(
                 )
                 continue
 
-            if recipient_domain_is_blocked(email):
+            if recipient_is_blocked(email, also_block_sender=cm.SENDER_EMAIL):
                 stats["skipped"] += 1
                 stats["skip_blocked_domain"] += 1
-                df.at[idx, cm.STATUS_COL] = "Pominięto: domena zablokowana"
+                df.at[idx, cm.STATUS_COL] = "Pominięto: adres/domena zablokowana"
                 _save_csv(df, csv_path)
                 cm._append_campaign_log(
                     cm.CAMPAIGN_LOG_PATH,
@@ -384,7 +384,7 @@ def _send_from_cleaned_csv(
                     company=company_for_log,
                     subject="",
                     status="skipped",
-                    reason="blocked_domain",
+                    reason="blocked_recipient",
                 )
                 continue
 

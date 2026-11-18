@@ -2,6 +2,10 @@
 
 To narzędzie techniczne: **Ty odpowiadasz** za legalność wysyłki (RODO, prawo pracy, regulaminy portali, zgody tam, gdzie są wymagane).
 
+### Pętla maili między własnymi Gmailami
+
+Jeśli w wątku widać ciąg wiadomości `svinchak1993@gmail.com` → `Swinczakaleksy@gmail.com` z samym „Pokaż cytowany tekst”, to zwykle **auto-forward / filtr Gmail** między dwoma kontami, a nie kampania CV. Pipeline **nie** powinien wysyłać na te adresy (`config/blocked_emails.txt`). Żeby zatrzymać pętlę: w obu kontach Gmail wyłącz przekazywanie / filtry „prześlij dalej” i usuń wątek.
+
 - Wysyłaj tylko tam, gdzie masz **uzasadnioną podstawę** (np. odpowiedź na ogłoszenie o pracę, zapytanie biznesowe zgodne z prawem).
 - **Nie obchodź** logowań, paywalli ani warunków ToS stron trzecich.
 - **Listy blokady domen** (`config/blocked_domains.txt`) służą do wykluczania adresów, których nie chcesz kontaktować (np. własna organizacja).

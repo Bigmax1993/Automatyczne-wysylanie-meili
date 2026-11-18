@@ -1,0 +1,4 @@
+# Pełne adresy e-mail (jedna linia = jeden adres), których NIE wolno używać jako odbiorców kampanii.
+# Chroni przed pętlą auto-forward między własnymi skrzynkami Gmail.
+svinchak1993@gmail.com
+swinczakaleksy@gmail.com
