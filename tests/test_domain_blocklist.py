@@ -73,6 +73,35 @@ def test_reload_after_reload_sec_reads_new_file(monkeypatch, tmp_path) -> None:
 
 def test_missing_file_returns_empty_blocklist(monkeypatch) -> None:
     monkeypatch.setattr(bl, "BLOCKLIST_PATH", str("/nonexistent/path/block.txt"))
+    monkeypatch.setattr(bl, "EMAIL_BLOCKLIST_PATH", str("/nonexistent/path/emails.txt"))
     bl.clear_blocklist_cache()
     assert bl.load_blocked_domains() == frozenset()
+    assert bl.load_blocked_emails() == frozenset()
     assert bl.recipient_domain_is_blocked("any@where.pl") is False
+    assert bl.recipient_email_is_blocked("any@where.pl") is False
+
+
+def test_recipient_email_is_blocked_exact(tmp_path, monkeypatch) -> None:
+    p = tmp_path / "emails.txt"
+    p.write_text(
+        "# komentarz\n"
+        "Swinczakaleksy@gmail.com\n"
+        "  other@test.pl  \n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bl, "EMAIL_BLOCKLIST_PATH", str(p))
+    monkeypatch.setattr(bl, "BLOCKLIST_PATH", str(tmp_path / "missing-domains.txt"))
+    bl.clear_blocklist_cache()
+    assert bl.recipient_email_is_blocked("swinczakaleksy@gmail.com") is True
+    assert bl.recipient_email_is_blocked("OTHER@test.pl") is True
+    assert bl.recipient_email_is_blocked("ok@firma.pl") is False
+    assert bl.recipient_is_blocked("swinczakaleksy@gmail.com") is True
+    assert bl.recipient_is_blocked("ok@firma.pl") is False
+
+
+def test_recipient_is_blocked_also_blocks_sender(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(bl, "BLOCKLIST_PATH", str(tmp_path / "missing-d.txt"))
+    monkeypatch.setattr(bl, "EMAIL_BLOCKLIST_PATH", str(tmp_path / "missing-e.txt"))
+    bl.clear_blocklist_cache()
+    assert bl.recipient_is_blocked("me@gmail.com", also_block_sender="me@gmail.com") is True
+    assert bl.recipient_is_blocked("you@gmail.com", also_block_sender="me@gmail.com") is False

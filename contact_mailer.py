@@ -26,7 +26,7 @@ try:
 except Exception:  # pragma: no cover - optional dependency at import time
     OpenAI = None  # type: ignore[assignment]
 
-from domain_blocklist import recipient_domain_is_blocked
+from domain_blocklist import recipient_is_blocked
 from pipeline_logging import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -1157,10 +1157,10 @@ def _process_rows(
 
         email = normalize_recipient_email(email)
 
-        if recipient_domain_is_blocked(email):
+        if recipient_is_blocked(email, also_block_sender=SENDER_EMAIL):
             stats["skipped"] += 1
             stats["skip_blocked_domain"] += 1
-            df.at[idx, STATUS_COL] = "Pominięto: domena zablokowana"
+            df.at[idx, STATUS_COL] = "Pominięto: adres/domena zablokowana"
             zapisz_excel(df, excel_path)
             _append_campaign_log(
                 CAMPAIGN_LOG_PATH,
@@ -1168,7 +1168,7 @@ def _process_rows(
                 company=company_for_log,
                 subject="",
                 status="skipped",
-                reason="blocked_domain",
+                reason="blocked_recipient",
             )
             continue
 

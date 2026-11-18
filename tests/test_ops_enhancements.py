@@ -86,7 +86,7 @@ def test_process_rows_skips_blocked_domain(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cm, "_generate_mail_with_retry", lambda **_k: "x" * 500)
     monkeypatch.setattr(cm, "MAIL_BODY_MIN_CHARS", 0)
     monkeypatch.setattr(cm, "MAIL_BODY_MIN_SENTENCES", 0)
-    monkeypatch.setattr(cm, "recipient_domain_is_blocked", lambda _e: True)
+    monkeypatch.setattr(cm, "recipient_is_blocked", lambda _e, **_k: True)
 
     df = pd.DataFrame(
         [

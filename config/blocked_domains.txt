@@ -1,4 +1,5 @@
 # Jedna domena na linię (część po @ w adresie e-mail), małe litery.
+# Pełne adresy (np. ja@gmail.com) trzymaj w config/blocked_emails.txt.
 # Przykłady (usuń # aby aktywować):
 # competitor.example.com
 # old-employer.pl
